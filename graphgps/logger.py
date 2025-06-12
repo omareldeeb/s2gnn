@@ -12,7 +12,7 @@ from torch_geometric.graphgym import get_current_gpu_usage
 from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.logger import infer_task, Logger
 from torch_geometric.graphgym.utils.io import dict_to_json, dict_to_tb
-from torchmetrics.functional import auroc
+from torchmetrics.functional import auroc, accuracy, average_precision
 
 import graphgps.metrics_ogb as metrics_ogb
 from graphgps.metric_wrapper import MetricWrapper
@@ -134,22 +134,30 @@ class CustomLogger(Logger):
         # Send to GPU to speed up TorchMetrics if possible.
         true = true.to(torch.device(cfg.device))
         pred_score = pred_score.to(torch.device(cfg.device))
-        acc = MetricWrapper(metric='accuracy',
-                            target_nan_mask='ignore-mean-label',
-                            threshold=0.,
-                            cast_to_int=True)
-        ap = MetricWrapper(metric='averageprecision',
-                           target_nan_mask='ignore-mean-label',
-                           pos_label=1,
-                           cast_to_int=True)
-        auroc = MetricWrapper(metric='auroc',
-                              target_nan_mask='ignore-mean-label',
-                              pos_label=1,
-                              cast_to_int=True)
+        
+        num_labels = pred_score.shape[-1]
+
+        # acc = MetricWrapper(metric='accuracy',
+        #                     target_nan_mask='ignore-mean-label',
+        #                     threshold=0.5,
+        #                     cast_to_int=True, task="multilabel", num_labels=num_labels)
+        # ap = MetricWrapper(metric='averageprecision',
+        #                    target_nan_mask='ignore-mean-label',
+        #                 #    pos_label=1,
+        #                    cast_to_int=True, task="multilabel", num_labels=num_labels)
+        # auroc = MetricWrapper(metric='auroc',
+        #                       target_nan_mask='ignore-mean-label',
+        #                     #   pos_label=1,
+        #                       cast_to_int=True, task="multilabel", num_labels=num_labels)
+
+        acc_score = accuracy(pred_score, true.int(), task="multilabel", num_labels=num_labels)
+        ap_score = average_precision(pred_score, true.int(), task="multilabel", num_labels=num_labels)
+        auc_score = auroc(pred_score, true.int(), task="multilabel", num_labels=num_labels)
+        
         results = {
-            'accuracy': reformat(acc(pred_score, true)),
-            'ap': reformat(ap(pred_score, true)),
-            'auc': reformat(auroc(pred_score, true)),
+            'accuracy': reformat(acc_score),
+            'ap': reformat(ap_score),
+            'auc': reformat(auc_score),
         }
 
         if self.test_scores:
