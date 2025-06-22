@@ -245,7 +245,7 @@ class CustomLogger(Logger):
             'spearmanr': reformat(eval_spearmanr(true.numpy(),
                                                  pred.numpy())['spearmanr']),
             'mse': reformat(mean_squared_error(true, pred)),
-            'rmse': reformat(mean_squared_error(true, pred, squared=False)),
+            # 'rmse': reformat(mean_squared_error(true, pred, squared=False)),
         }
 
     def update_stats(self, pred, true, loss, lr, time_used, params,
