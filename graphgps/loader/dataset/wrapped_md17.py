@@ -3,6 +3,7 @@ import copy
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.datasets import MD17
 import torch_geometric.transforms as T
+from tqdm import tqdm
 
 
 class WrappedMD17(InMemoryDataset):
@@ -53,6 +54,9 @@ class WrappedMD17(InMemoryDataset):
         return 1000#len(self.md17_dataset)
 
     def get(self, idx):
+        if self._data:
+            return super().get(idx)
+        
         if not hasattr(self, '_data_list') or self._data_list is None:
             self._data_list = self.len() * [None]
         elif self._data_list[idx] is not None:
@@ -65,12 +69,14 @@ class WrappedMD17(InMemoryDataset):
         row, col = md17_data.edge_index
         edge_weight = (pos[row] - pos[col]).norm(dim=-1)
 
+        normalized_energy = md17_data.energy
+
         encapsulated_data = Data(
             x=md17_data.z.unsqueeze(1),
             #pos=md17_data.pos,
             edge_index=md17_data.edge_index,
-            edge_weigts=edge_weight,
-            y=md17_data.energy.squeeze()
+            edge_weight=edge_weight,
+            y=normalized_energy.squeeze()
         )
 
         return encapsulated_data
