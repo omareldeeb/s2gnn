@@ -6,15 +6,18 @@ from itertools import product
 
 import numpy as np
 import torch
+import torch.utils.data
 import torch_geometric.transforms as T
 from numpy.random import default_rng
 from ogb.graphproppred import PygGraphPropPredDataset
 from torch_geometric.datasets import (GNNBenchmarkDataset, Planetoid, TUDataset,
                                       WikipediaNetwork, ZINC)
+import torch_geometric.datasets
 from torch_geometric.data import InMemoryDataset
 from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.register import register_loader
 
+from graphgps.loader.dataset.wrapped_md17 import WrappedMD17
 from graphgps.loader.loader import (load_pyg,
                                     load_ogb,
                                     load_arxiv_year,
@@ -196,6 +199,12 @@ def load_dataset_master(format, name, dataset_dir):
 
     elif format == 'synthetic':
         dataset = preformat_synthetic(dataset_dir, name)
+
+    elif format == 'torch_geometric':
+        if name == 'md17':
+            dataset = WrappedMD17(root=dataset_dir, name="ethanol")
+            s_dict = dataset.get_idx_split()
+            dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
 
     else:
         raise ValueError(f"Unknown data format: {format}")
