@@ -4,6 +4,7 @@ from torch_geometric.graphgym.models.encoder import AtomEncoder
 from torch_geometric.graphgym.register import register_node_encoder
 
 from graphgps.encoder.ast_encoder import ASTNodeEncoder
+from graphgps.encoder.embedding_node_encoder import EmbeddingNodeEncoder
 from graphgps.encoder.kernel_pos_encoder import RWSENodeEncoder, \
     HKdiagSENodeEncoder, ElstaticSENodeEncoder
 from graphgps.encoder.laplace_pos_encoder import LapPENodeEncoder
@@ -104,6 +105,7 @@ def concat_node_encoders(encoder_classes, pe_enc_names):
 # Dataset-specific node encoders.
 ds_encs = {'Atom': AtomEncoder,
            'ASTNode': ASTNodeEncoder,
+           'Embedding': EmbeddingNodeEncoder,
            'PPANode': PPANodeEncoder,
            'TypeDictNode': TypeDictNodeEncoder,
            'VOCNode': VOCNodeEncoder,
