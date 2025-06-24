@@ -11,11 +11,11 @@ class EmbeddingNodeEncoder(nn.Module):
         dim_emb (int): The output embedding dimension.
     """
 
-    def __init__(self, dim_emb: int, dim_in: int = 9):
+    def __init__(self, dim_emb: int, dim_in: int = 118):
         super().__init__()
         self.dim_in = dim_emb
         self.dim_emb = dim_emb
-        self.embedding = nn.Embedding(9, dim_emb)
+        self.embedding = nn.Embedding(dim_in, dim_emb)
         nn.init.xavier_uniform_(self.embedding.weight.data)
 
     def forward(self, batch):

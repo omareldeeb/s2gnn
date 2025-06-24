@@ -18,6 +18,7 @@ from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.register import register_loader
 
 from graphgps.loader.dataset.wrapped_md17 import WrappedMD17
+from graphgps.loader.dataset.wrapped_qm9 import WrappedQM9
 from graphgps.loader.loader import (load_pyg,
                                     load_ogb,
                                     load_arxiv_year,
@@ -203,6 +204,11 @@ def load_dataset_master(format, name, dataset_dir):
     elif format == 'torch_geometric':
         if name == 'md17':
             dataset = WrappedMD17(root=dataset_dir, name="ethanol")
+            s_dict = dataset.get_idx_split()
+            dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
+
+        elif name == 'qm9':
+            dataset = WrappedQM9(root=dataset_dir, name="ethanol")
             s_dict = dataset.get_idx_split()
             dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
 
