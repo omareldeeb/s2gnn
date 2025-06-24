@@ -135,6 +135,41 @@ class AddMagneticLaplacianEigenvectorPlain(BaseTransform):
         L = to_scipy_sparse_matrix(lap_edge_index, lap_edge_weight, num_nodes)
         return L
 
+    def _integrity_check(self, data: Data):
+        ei = data.edge_index
+        ew = data.edge_weight
+        edge_index, edge_weight = coalesce(ei, ew, data.num_nodes)
+        data_eigval = data[self.attr_eigval_name]
+        data_eigvec = data[self.attr_eigvec_name]
+        data_eigval_mask = data[self.attr_eigval_name + '_mask']
+        data_eigval_bounds = data[self.attr_eigval_name + '_bounds']
+
+        k=self.k
+        if self.drop_trailing_repeated:
+            assert self.which == 'LM' or self.which == 'SA'
+            k += 1
+        calc_magnetic_laplacian = self._calc_magnetic_laplacian(data, edge_index, edge_weight)
+        calc_deg = self._get_deg(data)
+        eig_vals, eig_vecs = self._get_eig(k, calc_magnetic_laplacian, calc_deg, self.which, **self.kwargs)
+        eig_vals_order = eig_vals.argsort()[:min(k, len(eig_vals))]
+        eig_vals = eig_vals[eig_vals_order]
+        eig_vecs = eig_vecs[:, eig_vals_order]
+
+        if self.k > calc_magnetic_laplacian.shape[0]:
+            eig_vals_ = np.zeros(self.k, dtype=eig_vals.dtype)
+            eig_vals_[:eig_vals.shape[0]] = eig_vals
+            eig_vals = eig_vals_
+            eig_vecs_ = np.zeros((data.num_nodes, self.k), dtype=eig_vecs.dtype)
+            eig_vecs_[:, :eig_vecs.shape[1]] = eig_vecs
+            eig_vecs = eig_vecs_
+            mask = np.zeros(self.k, dtype=bool)
+            mask[:data_eigval_mask.shape[0]] = data_eigval_mask
+            mask[calc_magnetic_laplacian.shape[0]:] = False
+
+        calc_positional_encoding = self._calc_positional_encoding(edge_index, eig_vals, eig_vecs, data.num_nodes)
+        pass
+
+
     def _calc_positional_encoding(
             self, edge_index_und: torch.Tensor, eig_vals: np.ndarray,
             eig_vecs: np.ndarray, num_nodes: int, sigma=1e-7) -> torch.Tensor:
@@ -185,6 +220,31 @@ class AddMagneticLaplacianEigenvectorPlain(BaseTransform):
             eig_vecs = eig_vecs[:, :k]
         return eig_vals, eig_vecs
 
+    def _get_deg(self, data: Data):
+        edge_index = data.edge_index
+        edge_weight = data.edge_weight
+        num_nodes = data.num_nodes
+        return scatter(edge_weight, edge_index[0], 0,
+                      dim_size=num_nodes, reduce='sum')
+
+    def _get_eig(self, k: int, L: any, deg: torch.Tensor, which: str, **kwargs):
+        if k < L.shape[0] - 1:
+            eig_vals = None
+            for _ in range(self.n_failover):  # Fail over for new random init
+                try:
+                    eig_vals, eig_vecs = self._calc_eig(
+                        L, k=k, which=which, deg=deg.numpy(), **kwargs)
+                except:  # noqa E722
+                    print('Eigval calc failed')
+
+                if eig_vals is not None:
+                    break
+            else:
+                raise ValueError('Eigval calc failed repeatedly')
+        else:
+            eig_vals, eig_vecs = scipy.linalg.eigh(L.toarray())
+        return eig_vals, eig_vecs
+
     def __call__(self, data: Data) -> Data:
         num_nodes = data.num_nodes
 
@@ -227,21 +287,7 @@ class AddMagneticLaplacianEigenvectorPlain(BaseTransform):
             which = 'LM'
             kwargs['sigma'] = 0
 
-        if k < L.shape[0] - 1:
-            eig_vals = None
-            for _ in range(self.n_failover):  # Fail over for new random init
-                try:
-                    eig_vals, eig_vecs = self._calc_eig(
-                        L, k=k, which=which, deg=deg.numpy(), **kwargs)
-                except:  # noqa E722
-                    print('Eigval calc failed')
-
-                if eig_vals is not None:
-                    break
-            else:
-                raise ValueError('Eigval calc failed repeatedly')
-        else:
-            eig_vals, eig_vecs = scipy.linalg.eigh(L.toarray())
+        eig_vals, eig_vecs = self._get_eig(k, L, deg, which, **kwargs)
 
         eig_vals_order = eig_vals.argsort()[:min(k, len(eig_vals))]
         eig_vals = eig_vals[eig_vals_order]

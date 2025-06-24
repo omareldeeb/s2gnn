@@ -5,7 +5,6 @@ from torch_geometric.datasets import MD17
 import torch_geometric.transforms as T
 from tqdm import tqdm
 
-
 class WrappedMD17(InMemoryDataset):
     def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 5.0, num_neighbors: int = 12):
         """
@@ -35,6 +34,12 @@ class WrappedMD17(InMemoryDataset):
         # Load the original MD17 dataset
         self.md17_dataset = MD17(root=root, name=name)
         self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
+
+        # mean_energy = 0.0
+        # for item in tqdm(self.md17_dataset, desc="Computing mean energy"):
+        #     mean_energy += item.energy
+        # mean_energy /= len(self.md17_dataset)
+        # self.mean_energy = mean_eneray
 
     @property
     def raw_file_names(self):
@@ -73,7 +78,7 @@ class WrappedMD17(InMemoryDataset):
 
         encapsulated_data = Data(
             x=md17_data.z.unsqueeze(1),
-            #pos=md17_data.pos,
+            pos=md17_data.pos,
             edge_index=md17_data.edge_index,
             edge_weight=edge_weight,
             y=normalized_energy.squeeze()

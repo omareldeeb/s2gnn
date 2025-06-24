@@ -35,7 +35,7 @@ def extended_cfg(cfg):
     cfg.train.ckpt_data_attrs = ['y', 'pred', 'batch']
 
     cfg.train.mode = 'standard'
-    cfg.device = 'cuda:0'
+    cfg.device = 'cpu' #'cuda:0'
 
     # Train and val config for sampling configurations in tpu graphs
     cfg.train.num_sample_configs = 16

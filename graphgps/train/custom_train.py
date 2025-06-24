@@ -16,8 +16,14 @@ import torch.nn.functional as F
 
 from graphgps.checkpoint import load_ckpt, save_ckpt, clean_ckpt, get_ckpt_dir
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
+from graphgps.transform.precalc_eigvec import AddMagneticLaplacianEigenvectorPlain
 from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
+
+mlep = AddMagneticLaplacianEigenvectorPlain(
+    k=150, 
+    positional_encoding=True, normalization='sym', q=0, 
+    drop_trailing_repeated=False, scc=False, which='SA', sparse=False, dtype=torch.float32, n_failover=10)
 
 def train_epoch(logger, loader, model, avg_model,
                 optimizer, scheduler, batch_accumulation):
@@ -28,6 +34,7 @@ def train_epoch(logger, loader, model, avg_model,
     for iter, batch in enumerate(loader):
         batch.split = 'train'
         batch.to(torch.device(cfg.device))
+        mlep._integrity_check(batch)
         pred, true = model(batch)
         if cfg.dataset.name == 'source-dist':
             # Get predictions to a reasonable range
@@ -125,6 +132,7 @@ def eval_epoch(logger, loader, model, split='val'):
         else:
             batch.to(torch.device(cfg.device))
             batch.split = split
+            mlep._integrity_check(batch)
             out = model(batch)
             if len(out) == 2:
                 pred, true = out
@@ -256,8 +264,8 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        # torch.cpu.empty_cache()
+        torch.cpu.synchronize()
 
         start_time = time.perf_counter()
         pred, data = [], []
@@ -268,8 +276,8 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         data.append(loggers[0]._data)
         perf[0].append(loggers[0].write_epoch(cur_epoch))
 
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        # torch.cpu.empty_cache()
+        torch.cpu.synchronize()
 
         if (cfg.optim.model_averaging
                 and cur_epoch >= cfg.optim.model_averaging_start):

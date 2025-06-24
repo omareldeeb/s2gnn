@@ -6,7 +6,7 @@ wandb:
   entity: tum_i26
 dataset:
   format: OGB
-  name: peptides-functional
+  name: md17 
   task: graph
   task_type: classification_multilabel
   transductive: False
