@@ -3,6 +3,31 @@ import torch_geometric.transforms as T
 import copy
 from torch_geometric.data import Data
 from torch_geometric.data import InMemoryDataset
+import numpy as np
+import os
+from sklearn.linear_model import LinearRegression
+import torch
+
+def precompute_qm9_normalization(ds, output_path='qm9_atomref.npz'):
+    prop_id = 7                    # U0 (eV) in the PyG loader
+    Z, ptr = ds.data.z.numpy(), ds.slices['z']
+    y = ds.data.y[:, prop_id].numpy()            # (n_mol,)
+
+    elements = [1, 6, 7, 8, 9]                        # H,C,N,O,F
+    X = np.zeros((len(ptr)-1, len(elements)))
+    for i in range(len(ptr)-1):
+        atoms = Z[ptr[i]:ptr[i+1]]
+        #Number of atoms of each type (for each molecule i)
+        X[i]  = [(atoms == Z0).sum() for Z0 in elements]
+
+    lin = LinearRegression().fit(X, y)
+    baseline  = lin.predict(X)
+    residuals = y - baseline
+
+    # replace targets in–memory; now train on residuals
+    ds.data.y[:, prop_id] = torch.tensor(residuals, dtype=torch.float32)
+    # np.savez(output_path, coef=lin.coef_, intercept=lin.intercept_)
+    return {'coef': lin.coef_, 'intercept': lin.intercept_}
 
 class WrappedQM9(InMemoryDataset):
     def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 5.0, num_neighbors: int = 12):
@@ -11,6 +36,7 @@ class WrappedQM9(InMemoryDataset):
         self.name = name
         self.train = train
         self.qm9_dataset = QM9(root=root, transform=transform, pre_transform=pre_transform, pre_filter=pre_filter)
+        self._load_normalized_parameters()
 
     def len(self):
         return 1000
@@ -51,8 +77,14 @@ class WrappedQM9(InMemoryDataset):
         #Ev to kcal/mol
         return energy * 23.0621
 
-
-
+    def _load_normalized_parameters(self, path='qm9_atomref.npz'):
+        precompute_qm9_normalization(self.qm9_dataset, path)
+        # if not os.path.exists(path):
+        #     precompute_qm9_normalization(self.qm9_dataset, path)
+        # else:
+        #     print(f"Loading normalized parameters from {path}")
+        #     coef, intercept = np.load(path)['coef'], np.load(path)['intercept']
+        #     self.qm9_dataset.data.y[:, 7] = self.qm9_dataset.data.y[:, 7] * coef + intercept
 
 
     def get_idx_split(self):

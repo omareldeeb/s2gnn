@@ -3,7 +3,7 @@ metric_best: mae
 wandb:
   use: True
   project: mlff
-  entity: tum_i26
+  entity: daniel-rothenpieler-technical-university-of-munich
 dataset:
   format: torch_geometric
   name: qm9
@@ -33,7 +33,7 @@ posenc_RWSE:
   raw_norm_type: BatchNorm
 train:
   mode: custom
-  batch_size: 200
+  batch_size: 1
   eval_period: 1
   ckpt_period: 100
 model:
@@ -54,11 +54,12 @@ gnn:
   dropout: 0.25
   agg: sum
   spectral:
-    layer_skip: [3]
+    layer_skip: [0,1,2,3]
     frequency_cutoff: 0.7
     filter_encoder: basis # basis, lin, mlp or attn
     feature_transform: glu_0.05
     filter_variant: None  # None, silu or silu_mix
+    # filter_layers: 0
     window: tukey
     basis_num_gaussians: 60
     basis_bottleneck: 0.2
