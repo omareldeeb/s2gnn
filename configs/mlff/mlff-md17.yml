@@ -7,7 +7,7 @@ wandb:
   entity: daniel-rothenpieler-technical-university-of-munich
 dataset:
   format: torch_geometric
-  name: qm9
+  name: md17
   task: graph
   task_type: regression
   transductive: False
@@ -57,7 +57,7 @@ gnn:
   agg: sum
   spectral:
     layer_skip: [3]
-    frequency_cutoff: 0.8
+    frequency_cutoff: 1.0
     filter_encoder: basis # basis, lin, mlp or attn
     feature_transform: glu_0.05
     filter_variant: None  # None, silu or silu_mix
@@ -69,9 +69,9 @@ gnn:
 optim:
   clip_grad_norm: True
   optimizer: adamW
-  model_averaging: ema
   weight_decay: 0.0035
   base_lr: 0.00225
+  model_averaging: ema
   max_epoch: 250
   scheduler: cosine_with_warmup
   num_warmup_epochs: 5

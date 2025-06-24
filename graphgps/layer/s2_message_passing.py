@@ -10,6 +10,7 @@ from torch import nn
 import torch_geometric.nn
 from torch_geometric.nn import GCNConv
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
+from torch_geometric.nn.models.schnet import CFConv
 import torch_geometric.graphgym.register as register
 from torch_geometric.graphgym.config import cfg
 from torch_geometric.graphgym.models.layer import LayerConfig
@@ -229,6 +230,21 @@ class FeatureBatchSpatialDirectionalGraphConv(nn.Module):
         return batch
 
 
+
+
+class GaussianSmearing(torch.nn.Module):
+    def __init__(self, start: float, stop: float, num_gaussians: int):
+        super().__init__()
+        offset = torch.linspace(start, stop, num_gaussians)
+        self.coeff = -0.5 / (offset[1] - offset[0]).item()**2
+        self.register_buffer('offset', offset)
+
+    def forward(self, dist: torch.Tensor) -> torch.Tensor:
+        # dist: [num_edges]
+        dist_expanded = dist.view(-1, 1) - self.offset.view(1, -1)
+        return torch.exp(self.coeff * dist_expanded.pow(2))
+
+
 class GCNConvGNNLayer(nn.Module):
 
     def __init__(self, layer_config: LayerConfig, add_self_loops: bool = True,
@@ -244,20 +260,31 @@ class GCNConvGNNLayer(nn.Module):
         self.use_edge_attr = use_edge_attr
         self.overwrite_x = overwrite_x
 
+        n_gaussians = 50
+        cutoff = 5.0
+        n_filters = 64
+        self.distance_expansion = GaussianSmearing(0.0, cutoff, n_gaussians)
+
         dim_in, dim_out = layer_config.dim_in, layer_config.dim_out
         has_bias = layer_config.has_bias
         if use_edge_attr:
-            self.edge_nn = nn.Linear(dim_in, 1)
+            self.edge_nn = nn.Sequential(
+                nn.Linear(n_gaussians, n_filters),
+                nn.ReLU(),
+                nn.Linear(n_filters, n_filters)
+            )
+
         gcn_normalize = True if normalize == 'dir' else False
-        self.conv = GCNConv(dim_in, dim_out, bias=has_bias, normalize=gcn_normalize)
+        # self.conv = GCNConv(dim_in, dim_out, bias=has_bias, normalize=gcn_normalize)
+        self.conv = CFConv(in_channels=dim_in, out_channels=dim_out, num_filters=n_filters, nn=self.edge_nn, cutoff=cutoff)
 
         self.dropout = nn.Dropout(layer_config.dropout)
         self.activation = register.act_dict[layer_config.act]()
 
     def forward(self, batch):
         if self.use_edge_attr:
-            y = self.conv(batch.x, batch.edge_index,
-                          self.edge_nn(batch.edge_attr))
+            smeared_edge_attr = self.distance_expansion(batch.edge_attr)
+            y = self.conv(batch.x, batch.edge_index, edge_weight=batch.edge_weight, edge_attr=smeared_edge_attr)
         else:
             y = self.conv(batch.x, batch.edge_index)
         y = self.dropout(self.activation(y))

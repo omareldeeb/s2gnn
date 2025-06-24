@@ -6,6 +6,13 @@ import torch_geometric.transforms as T
 from tqdm import tqdm
 
 
+def normalize_md17_energy(dataset):
+    mean_energy = 0.0
+    for item in tqdm(dataset, desc="Computing mean energy"):
+        mean_energy += item.energy
+    mean_energy /= len(dataset)
+    return mean_energy
+
 class WrappedMD17(InMemoryDataset):
     def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 5.0, num_neighbors: int = 12):
         """
@@ -34,8 +41,9 @@ class WrappedMD17(InMemoryDataset):
         self.train = train
         # Load the original MD17 dataset
         self.md17_dataset = MD17(root=root, name=name)
-        self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
-
+        self.mean_energy = -97195.9314#normalize_md17_energy(self.md17_dataset)
+        # self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
+        self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors), T.Distance(norm=False)])
     @property
     def raw_file_names(self):
         """A list of files in the raw_dir which needs to be downloaded."""
@@ -63,20 +71,21 @@ class WrappedMD17(InMemoryDataset):
             return copy.copy(self._data_list[idx])
         # Get the original data object from the MD17 dataset
         md17_data = self.md17_dataset[idx]
-        md17_data = self.compute_edge_indices(md17_data)
+        md17_data = self.compute_edge_indices_norm(md17_data)
 
         pos = md17_data.pos
         row, col = md17_data.edge_index
-        edge_weight = (pos[row] - pos[col]).norm(dim=-1)
+        # edge_weight = (pos[row] - pos[col]).norm(dim=-1)
 
         normalized_energy = md17_data.energy
 
         encapsulated_data = Data(
             x=md17_data.z.unsqueeze(1),
-            #pos=md17_data.pos,
+            pos=md17_data.pos,
             edge_index=md17_data.edge_index,
-            edge_weight=edge_weight,
-            y=normalized_energy.squeeze()
+            edge_attr=md17_data.edge_attr,
+            edge_weight=md17_data.edge_attr.view(-1),
+            y=normalized_energy.squeeze() - self.mean_energy
         )
 
         return encapsulated_data

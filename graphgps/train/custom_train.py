@@ -245,7 +245,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         assert not cfg.gnn.batchnorm, 'No BatchNorm with averaging'
         assert not cfg.gnn.batchnorm_post_mp, 'No BatchNorm with averaging'
         if cfg.optim.model_averaging == 'ema':
-            def avg_fn(avg_parameter, curr_parameter, *args, decay=0.999):
+            def avg_fn(avg_parameter, curr_parameter, *args, decay=0.995):
                 return decay * avg_parameter + (1 - decay) * curr_parameter
         else:
             avg_fn = None

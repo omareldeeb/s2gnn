@@ -32,14 +32,17 @@ def precompute_qm9_normalization(ds, output_path='qm9_atomref.npz'):
 class WrappedQM9(InMemoryDataset):
     def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 5.0, num_neighbors: int = 12):
         super().__init__(root, transform, pre_transform, pre_filter)
-        self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
+        # self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
+
+        self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors), T.Distance(norm=False)])
         self.name = name
         self.train = train
         self.qm9_dataset = QM9(root=root, transform=transform, pre_transform=pre_transform, pre_filter=pre_filter)
         self._load_normalized_parameters()
 
+
     def len(self):
-        return 1000
+        return len(self.qm9_dataset)
 
     def get(self, idx):
         if self._data:
@@ -54,17 +57,14 @@ class WrappedQM9(InMemoryDataset):
         atom_numbers = element.z
         kcalmol_energy = self._normalize_energy(self._extract_energy(element))
 
-        element = self.compute_edge_indices(element)
-        row, col = element.edge_index
-        edge_weight = (element.pos[row] - element.pos[col]).norm(dim=-1)
-
-        element.edge_weight = edge_weight
+        element = self.compute_edge_indices_norm(element)
 
         encapsulated_data = Data(
             x=atom_numbers.unsqueeze(1),
             pos=element.pos,
             edge_index=element.edge_index,
-            edge_weight=edge_weight,
+            edge_attr=element.edge_attr,
+            edge_weight=element.edge_attr.view(-1),
             y=kcalmol_energy
         )
 
