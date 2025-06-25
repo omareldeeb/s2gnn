@@ -13,7 +13,7 @@ class ScalarEmbedding(nn.Module):
 
     def __init__(self, dim_emb: int, dim_in: int = 118):
         super().__init__()
-        self.dim_in = dim_emb
+        self.dim_in = dim_in
         self.dim_emb = dim_emb
         self.embedding = nn.Embedding(dim_in, dim_emb)
         nn.init.xavier_uniform_(self.embedding.weight.data)

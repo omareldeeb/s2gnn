@@ -91,6 +91,7 @@ class ScalarFilter(nn.Module):
     def forward(self, dists: Tensor) -> Tensor:
         # JAX: jnp.sin(dists[...,None] * self.prefactors)
         x = torch.sin(dists.unsqueeze(-1) * self.prefactors)
+        x = x / (dists.unsqueeze(-1) + 1e-9)
         return self.lin(x)                       # (N, N, 3F)
 
 
@@ -227,8 +228,10 @@ class PaiNN(nn.Module):
                     'msg':MessageBlock(F, cutoff, n_radial_basis),
                     'upd':UpdateBlock(F),
                     # separate LayerNorms to match JAX behaviour
-                    'ln_s':nn.LayerNorm(F),
-                    'ln_v':nn.LayerNorm(F),        # applied to ‖v‖, see forward()
+                    'ln_s_msg':nn.LayerNorm(F),
+                    'ln_s_upd':nn.LayerNorm(F),
+                    'ln_v_msg':nn.LayerNorm(F), 
+                    'ln_v_upd':nn.LayerNorm(F), 
                 })
                 for _ in range(layers)
             ]
@@ -243,7 +246,7 @@ class PaiNN(nn.Module):
 
         # Final linear on scalars (optional)
         self.out_lin = nn.Linear(F, out_node_feature_dim, bias=True)
-        self.scalar_embedding = ScalarEmbedding(dim_emb=F)
+        self.scalar_embedding = ScalarEmbedding(dim_emb=F, dim_in=9)
         self.vector_embedding = DistanceEmbedding(cutoff=cutoff, radial_basis_fn=n_radial_basis, out_dim=F)
 
     # ------------------------------------------------------------------ #
@@ -262,25 +265,25 @@ class PaiNN(nn.Module):
 
         s = self.scalar_embedding(s)
         # v = self.vector_embedding(v)
-
+        
         # initial normalisation (LayerNorm on atom dimension)et        s = nn.LayerNorm(s.shape[-1])(s)
         v_norm = v.norm(dim=-1)
         v = v * (nn.LayerNorm(v_norm.shape[-1])(v_norm) / (v_norm + 1e-9)).unsqueeze(-1)
 
         for layer in self.layers:
             ds_msg, dv_msg = layer['msg'](s, v, dr, atom_mask)
-            s = layer['ln_s'](s + ds_msg)
+            s = layer['ln_s_msg'](s + ds_msg)
 
             v = v + dv_msg
             v_norm = v.norm(dim=-1)
-            v = v * (layer['ln_v'](v_norm) / (v_norm + 1e-9)).unsqueeze(-1)
+            v = v * (layer['ln_v_msg'](v_norm) / (v_norm + 1e-9)).unsqueeze(-1)
 
             ds_up, dv_up = layer['upd'](s, v)
-            s = layer['ln_s'](s + ds_up)
+            s = layer['ln_s_upd'](s + ds_up)
 
             v = v + dv_up
             v_norm = v.norm(dim=-1)
-            v = v * (layer['ln_v'](v_norm) / (v_norm + 1e-9)).unsqueeze(-1)
+            v = v * (layer['ln_v_upd'](v_norm) / (v_norm + 1e-9)).unsqueeze(-1)
 
         # Graph-level readout (sum over atoms)
 
