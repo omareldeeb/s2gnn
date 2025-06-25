@@ -256,8 +256,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        # torch.cuda.empty_cache()
+        # # torch.cuda.synchronize()
+        torch.cpu.synchronize()
 
         start_time = time.perf_counter()
         pred, data = [], []
@@ -268,8 +269,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         data.append(loggers[0]._data)
         perf[0].append(loggers[0].write_epoch(cur_epoch))
 
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        # torch.cuda.empty_cache()
+        # torch.cuda.synchronize()
+        torch.cpu.synchronize()
 
         if (cfg.optim.model_averaging
                 and cur_epoch >= cfg.optim.model_averaging_start):

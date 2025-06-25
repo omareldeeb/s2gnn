@@ -42,6 +42,7 @@ class WrappedQM9(InMemoryDataset):
 
 
     def len(self):
+        return 1000;
         return len(self.qm9_dataset)
 
     def get(self, idx):
