@@ -1,0 +1,1 @@
+gemnet_device = 'mps'
