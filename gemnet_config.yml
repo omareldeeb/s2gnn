@@ -53,8 +53,8 @@ output_init: "HeOrthogonal"
 logdir: "logs"
 # dataset: "md17_aspirin.npz"
 # val_dataset: "md17_aspirin.npz"
-dataset: "data/gemnet/coll_v1.2_train.npz"
-val_dataset: "data/gemnet/coll_v1.2_val.npz" 
+dataset: "md17_aspirin_mean_centered.npz"
+val_dataset: "md17_aspirin_mean_centered.npz" 
 num_train: 32 # derived from dataset
 num_val: 32 # derived from dataset
 
