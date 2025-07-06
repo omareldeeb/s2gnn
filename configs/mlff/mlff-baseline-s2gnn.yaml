@@ -7,7 +7,7 @@ wandb:
   entity: daniel-rothenpieler-technical-university-of-munich
 dataset:
   format: torch_geometric
-  name: md17
+  name: des370k
   task: graph
   task_type: regression
   transductive: False
@@ -45,23 +45,25 @@ model:
 gnn:
   head: mlp_graph
   layers_pre_mp: 0
-  layers_mp: 3
+  layers_mp: 6
   layers_post_mp: 3
   dim_inner: 128
-  layer_type: gcnconv
+  layer_type: interaction
   stage_type: stack
   batchnorm: False
   act: gelu
   dropout: 0.1
   agg: sum
+  use_edge_attr: True
+  layer_skip: [3, 4, 5]
   spectral:
-    layer_skip: [3]
+    layer_skip: []
     frequency_cutoff: 0.7
     filter_encoder: basis # basis, lin, mlp or attn
     feature_transform: glu_0.05
     filter_variant: None  # None, silu or silu_mix
     window: tukey
-    basis_num_gaussians: 60
+    basis_num_gaussians: 50
     basis_bottleneck: 0.2
     num_heads_filter_encoder: 128
 optim:
