@@ -197,6 +197,10 @@ class S2GNN(nn.Module):
             return GATConvGNNLayer
         elif model_type == 'gatedgcnconv':
             return GatedGCNConvGNNLayer
+        elif model_type == "interaction":
+            return partial(InteractionBlockGNNLayer,
+                           use_edge_attr=use_edge_attr,
+                           normalize=adj_norm)
         elif model_type.startswith('chebconv'):
             kwargs = {}
             if '-' in model_type:

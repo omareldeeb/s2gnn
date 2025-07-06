@@ -20,6 +20,7 @@ from torch_sparse import SparseTensor
 
 from graphgps.layer.gat_conv_layer import GATConv
 from graphgps.layer.gatedgcn_layer import GatedGCNLayer
+from torch_geometric.nn.models.schnet import SchNet, InteractionBlock, ShiftedSoftplus
 
 
 def directed_norm(edge_index, n_nodes, edge_weight=None, add_self_loops=True,
@@ -469,6 +470,56 @@ class FeatureBatchGNNLayer(nn.Module):
         else:
             return y
 
+
+class InteractionBlockGNNLayer(nn.Module):
+    def __init__(self, layer_config: LayerConfig,
+                 with_node_residual: bool = True, overwrite_x: bool = True,
+                 **kwargs):
+        if with_node_residual and layer_config.dim_in != layer_config.dim_out:
+            logging.warning(
+                f'Residual not possible with dim_in={layer_config.dim_in} not '
+                f'equal to dim_out={layer_config.dim_out}')
+            with_node_residual = False
+
+        super().__init__()
+        self.with_node_residual = with_node_residual
+        self.overwrite_x = overwrite_x
+
+        # TOOO: make configurable
+        n_gaussians = 50
+        cutoff = 10.0
+        n_filters = 64
+        self.distance_expansion = GaussianSmearing(0.0, cutoff, n_gaussians)
+
+        dim_in, dim_out = layer_config.dim_in, layer_config.dim_out
+        self.interaction = InteractionBlock(
+            dim_out,
+            n_gaussians,
+            n_filters,
+            cutoff
+        )
+        self.lin1 = nn.Linear(dim_out, dim_out)
+        self.dropout = nn.Dropout(layer_config.dropout)
+        self.activation = register.act_dict[layer_config.act]()
+
+    def forward(self, batch):
+        y = batch.x
+
+        # Assumes batch has edge_index and edge_weight computed using RadiusGraph
+        edge_attr = self.distance_expansion(batch.edge_weight)
+        y = y + self.interaction(y, batch.edge_index, batch.edge_weight, edge_attr)
+
+        y = self.lin1(y)
+        y = self.dropout(self.activation(y))
+
+        if self.with_node_residual:
+            y = batch.x + y
+
+        if self.overwrite_x:
+            batch.x = y
+            return batch
+        else:
+            return y
 
 def GNNLayer(layer_config, *args, **kwargs):
     """
