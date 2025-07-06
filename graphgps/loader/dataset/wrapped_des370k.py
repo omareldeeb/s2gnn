@@ -60,7 +60,7 @@ class WrappedDES370K(InMemoryDataset):
         return [f'encapsulated_DES370K_{"train" if self.train else "test"}.pt']
 
     def len(self):
-        return 1000#len(self.des370k_dataset)
+        return len(self.des370k_dataset)
 
     def get(self, idx):
         if self._data:
@@ -82,7 +82,7 @@ class WrappedDES370K(InMemoryDataset):
             energy = valid_energies[0]
         else:
             print(f"Warning: No valid energy found for index {idx}. Using 0.0 as default.")
-            energy = torch.tensor(0.0)
+            energy = torch.tensor(self.mean_energy)
         normalized_energy = energy - self.mean_energy
 
         encapsulated_data = Data(
