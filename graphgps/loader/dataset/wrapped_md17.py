@@ -1,20 +1,22 @@
 import copy
 
+import numpy as np
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.datasets import MD17
 import torch_geometric.transforms as T
 from tqdm import tqdm
 
 
-def normalize_md17_energy(dataset):
+def normalize_md17_energy(dataset, train_indices):
     mean_energy = 0.0
-    for item in tqdm(dataset, desc="Computing mean energy"):
+    for idx in train_indices:
+        item = dataset[idx]
         mean_energy += item.energy
-    mean_energy /= len(dataset)
+    mean_energy /= len(train_indices)
     return mean_energy
 
 class WrappedMD17(InMemoryDataset):
-    def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 5.0, num_neighbors: int = 12):
+    def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 10.0, num_neighbors: int = 32):
         """
         Initializes the custom dataset.
 
@@ -41,9 +43,15 @@ class WrappedMD17(InMemoryDataset):
         self.train = train
         # Load the original MD17 dataset
         self.md17_dataset = MD17(root=root, name=name)
-        self.mean_energy = -97195.9314#normalize_md17_energy(self.md17_dataset)
         # self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
         self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors), T.Distance(norm=False)])
+        self.splits = None
+
+        splits = self.get_idx_split()
+        train_indices = splits['train'] if 'train' in splits else list(range(self.len()))
+        self.mean_energy = normalize_md17_energy(self.md17_dataset, train_indices=train_indices)
+        self.splits = splits
+
     @property
     def raw_file_names(self):
         """A list of files in the raw_dir which needs to be downloaded."""
@@ -73,11 +81,11 @@ class WrappedMD17(InMemoryDataset):
         md17_data = self.md17_dataset[idx]
         md17_data = self.compute_edge_indices_norm(md17_data)
 
-        pos = md17_data.pos
-        row, col = md17_data.edge_index
+        # pos = md17_data.pos
+        # row, col = md17_data.edge_index
         # edge_weight = (pos[row] - pos[col]).norm(dim=-1)
 
-        normalized_energy = md17_data.energy
+        normalized_energy = md17_data.energy - self.mean_energy
 
         encapsulated_data = Data(
             x=md17_data.z.unsqueeze(1),
@@ -85,7 +93,8 @@ class WrappedMD17(InMemoryDataset):
             edge_index=md17_data.edge_index,
             edge_attr=md17_data.edge_attr,
             edge_weight=md17_data.edge_attr.view(-1),
-            y=normalized_energy.squeeze() - self.mean_energy
+            y=normalized_energy.squeeze(),
+            z=md17_data.z,
         )
 
         return encapsulated_data
@@ -96,16 +105,21 @@ class WrappedMD17(InMemoryDataset):
         Returns:
             Dict with 'train', 'val', 'test', splits indices.
         """
-        # random split from self.data_df
+        if self.splits is not None:
+            return self.splits
+        
         all_indices = list(range(self.len()))
+        # Shuffle the indices using np
+        np.random.shuffle(all_indices)
+
         num_train = int(0.8 * len(all_indices))
         num_val = int(0.1 * len(all_indices))
         num_test = len(all_indices) - num_train - num_val
-        train_indices = all_indices[:num_train]
-        val_indices = all_indices[num_train:num_train + num_val]
-        test_indices = all_indices[num_train + num_val:]
-        return {
-            'train': train_indices,
-            'val': val_indices,
-            'test': test_indices
+
+        self.splits = {
+            'train': all_indices[:num_train],
+            'val': all_indices[num_train:num_train + num_val],
+            'test': all_indices[num_train + num_val:]
         }
+
+        return self.splits
