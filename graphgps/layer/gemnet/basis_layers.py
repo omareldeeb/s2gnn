@@ -156,6 +156,7 @@ class SphericalBasisLayer(torch.nn.Module):
             sph2 = torch.zeros(
                 nEdges, Kmax, self.num_spherical, device=self.device_buffer.device, dtype=sph.dtype
             )
+            sph = sph.squeeze(-1)
             sph2[id3_reduce_ca, Kidx] = sph
 
             # (num_spherical, nEdges, num_radial), (nEdges, Kmax, num_spherical)
@@ -165,7 +166,7 @@ class SphericalBasisLayer(torch.nn.Module):
 class TensorBasisLayer(torch.nn.Module):
     """
     3D Fourier Bessel Basis
-
+    
     Parameters
     ----------
     num_spherical: int

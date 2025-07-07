@@ -32,6 +32,8 @@ class Dense(torch.nn.Module):
             self._activation = ScaledSiLU()
         elif activation is None:
             self._activation = torch.nn.Identity()
+        elif activation == "gelu":
+            self._activation = torch.nn.GELU()
         else:
             raise NotImplementedError(
                 "Activation function not implemented for GemNet (yet)."

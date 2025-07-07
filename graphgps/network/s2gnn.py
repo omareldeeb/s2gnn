@@ -193,6 +193,17 @@ class S2GNN(nn.Module):
                            make_undirected=make_undirected,
                            use_edge_attr=use_edge_attr,
                            normalize=adj_norm)
+
+        elif model_type == 'gemnet':
+            num_radial=6,
+            num_spherical=7
+            emb_size = cfg.gnn.dim_inner
+            shared_projections = None#SharedGemNetProjections(num_radial=num_radial, num_spherical=num_spherical, emb_size_cbf=emb_size, emb_size_rbf=emb_size)
+            return partial(GemNetInteractionBlockGNNLayer,
+                   make_undirected=make_undirected,
+                   use_edge_attr=use_edge_attr,
+                   normalize=adj_norm,
+                   shared_projections=shared_projections)
         elif model_type == 'gatconv':
             return GATConvGNNLayer
         elif model_type == 'gatedgcnconv':
@@ -229,7 +240,7 @@ class S2GNN(nn.Module):
             batch.num_graphs = 1
 
         for module in self.children():
-            batch = module(batch)
+             batch = module(batch)
         return batch
 
     def last_layer_keys(self) -> List[str]:

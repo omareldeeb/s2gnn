@@ -69,6 +69,11 @@ class AutomaticFit:
         """
         Load variable from file or set to initial value of the variable.
         """
+        if self.scale_file is None:
+            logging.debug(
+                f"Scale file is None, not loading variable {self._name}."
+            )
+            return
         value = read_value_json(self.scale_file, self._name)
         if value is None:
             logging.info(

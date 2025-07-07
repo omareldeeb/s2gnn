@@ -17,10 +17,22 @@ from torch_geometric.graphgym.models.layer import LayerConfig
 from torch_geometric.graphgym.models.layer import GeneralLayer
 from torch_geometric.utils import add_remaining_self_loops, scatter
 from torch_sparse import SparseTensor
+import torch.nn.functional as F
+import torch_scatter as scatter
 
 from graphgps.layer.gat_conv_layer import GATConv
 from graphgps.layer.gatedgcn_layer import GatedGCNLayer
-from torch_geometric.nn.models.schnet import SchNet, InteractionBlock, ShiftedSoftplus
+# from torch_geometric.nn.models.schnet import SchNet, InteractionBlock, ShiftedSoftplus
+
+from graphgps.layer.gemnet.base_layers import Dense
+from graphgps.layer.gemnet.basis_layers import BesselBasisLayer, SphericalBasisLayer
+from graphgps.layer.gemnet.efficient import EfficientInteractionDownProjection
+from graphgps.layer.gemnet.embedding_block import AtomEmbedding, EdgeEmbedding
+from graphgps.layer.gemnet.interaction_block import InteractionBlock, InteractionBlockTripletsOnly
+from graphgps.loader.gemnet.utils import compute_triplets
+from graphgps.network.gemnet import GemNet
+# from torch_geometric.nn.models.dimenet import BesselBasisLayer, SphericalBasisLayer
+
 
 
 def directed_norm(edge_index, n_nodes, edge_weight=None, add_self_loops=True,
@@ -246,6 +258,120 @@ class GaussianSmearing(torch.nn.Module):
         return torch.exp(self.coeff * dist_expanded.pow(2))
 
 
+class SharedGemNetProjections(nn.Module):
+    def __init__(self, num_radial, num_spherical, emb_size_rbf, emb_size_cbf):
+        super().__init__()
+        self.mlp_rbf3 = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
+        self.mlp_cbf3 = EfficientInteractionDownProjection(
+            num_spherical, num_radial, emb_size_cbf)
+        self.mlp_rbf_h = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
+
+
+class GemNetInteractionBlockGNNLayer(nn.Module):
+    def __init__(self, layer_config, *,  cutoff=5.0, num_radial=6, shared_projections: SharedGemNetProjections = None,
+                 num_spherical=7, emb_size=224, **cfg):
+        super().__init__()
+
+        # ——— dimensions ————————————————————————————————
+        self.emb_size_atom  = emb_size
+        self.emb_size_edge  = emb_size
+        self.emb_size_rbf   = emb_size  
+        self.emb_size_cbf   = emb_size
+        self.emb_size_trip  = emb_size   # down-projection size
+        # ——— basis layers ————————————————————————————————
+
+
+        self.rbf_basis  = BesselBasisLayer(num_radial, cutoff=cutoff)
+        self.cbf_basis3 = SphericalBasisLayer(num_spherical, num_radial,
+                                              cutoff=cutoff, efficient=True)
+        # shared MLPs exactly like GemNet
+        if shared_projections is not None:  # use pre-defined shared projections
+            self.mlp_rbf3  = shared_projections.mlp_rbf3
+            self.mlp_cbf3  = shared_projections.mlp_cbf3
+            self.mlp_rbf_h = shared_projections.mlp_rbf_h
+        else:  # create new shared projections
+            self.mlp_rbf3  = Dense(num_radial, self.emb_size_rbf, activation=None, bias=False)
+            self.mlp_cbf3  = EfficientInteractionDownProjection(
+                                num_spherical, num_radial, self.emb_size_cbf)
+            self.mlp_rbf_h = Dense(num_radial, self.emb_size_rbf, activation=None, bias=False)
+
+        # atom / edge embedding blocks (copied from GemNet)
+        self.atom_emb = AtomEmbedding(self.emb_size_atom)
+        self.edge_emb = EdgeEmbedding(self.emb_size_atom, num_radial,
+                                      self.emb_size_edge)
+
+        # InteractionBlock itself
+        self.block = InteractionBlockTripletsOnly(
+            emb_size_atom     = self.emb_size_atom,
+            emb_size_edge     = self.emb_size_edge,
+            emb_size_trip     = self.emb_size_trip,
+            emb_size_quad     = 0,                 # not used
+            emb_size_rbf      = self.emb_size_rbf,
+            emb_size_cbf      = self.emb_size_cbf,
+            emb_size_bil_trip = self.emb_size_trip,
+            num_before_skip   = 1,
+            num_after_skip    = 1,
+            num_concat        = 1,
+            num_atom          = 1,
+            activation        = 'gelu'
+        )
+
+    def forward(self, batch):
+        pos        = batch.pos                  # (nAtoms,3)
+        edge_index = batch.edge_index           # (2,nEdges)
+        Z          = batch.x                    # we assume x already is atomic numbers
+                                               # (OR supply batch.z, whatever you loaded)
+
+        src, dst = edge_index                  # src=c , dst=a
+        # nEdges   = src.numel()
+        nAtoms   = Z.size(0)
+
+        # 1) pair-wise geometry
+        vec = pos[dst] - pos[src]              # (nEdges,3)
+        dist = vec.norm(dim=1)                 # (nEdges,)
+        rbf  = self.rbf_basis(dist)            # (nEdges,num_radial)
+
+        # 2) triplet indices
+        id3_expand_ba, id3_reduce_ca, id_swap, Kidx3 = compute_triplets(
+            edge_index, num_nodes=nAtoms)
+
+        # 3) angles + CBF basis  (GemNet takes cos(angle) inside SphericalBasisLayer)
+        R_ca = pos[src[id3_reduce_ca]] - pos[dst[id3_reduce_ca]]
+        R_ba = pos[src[id3_expand_ba]] - pos[dst[id3_expand_ba]]
+        angles = GemNet.calculate_neighbor_angles(R_ca, R_ba)   # (nTriplets,)
+
+        cbf_basis = self.cbf_basis3(dist, angles, id3_reduce_ca, Kidx3) # tuple (rbf_env, sph2)
+
+        # 4) shared down-projections
+        rbf3  = self.mlp_rbf3(rbf)                  # (nEdges, emb_size_rbf)
+        cbf3  = self.mlp_cbf3(cbf_basis)            # (nEdges, emb_size_cbf)
+        rbf_h = self.mlp_rbf_h(rbf)                 # (nEdges, emb_size_rbf)
+
+        # 5) initial atom + edge embeddings
+        # h = self.atom_emb(Z)                        # (nAtoms, emb_size_atom)
+        h=Z
+
+        #TODO embed before interaction block
+        # Check Gemnet Paper fig p.19 and Eq. (32) again 
+        if not batch.edge_attr.shape[1] != 1:
+            m = self.edge_emb(h, rbf, src, dst)         # (nEdges, emb_size_edge)
+        else:
+            m = batch.edge_attr  # use edge_attr directly if it is already provided
+
+        h, m = self.block(
+            h=h, m=m,
+            rbf3=rbf3, cbf3=cbf3, Kidx3=Kidx3,
+            id_swap=id_swap,
+            id3_expand_ba=id3_expand_ba,
+            id3_reduce_ca=id3_reduce_ca,
+            rbf_h=rbf_h,
+            id_c=src, id_a=dst
+        )
+        # 6) update batch
+        batch.x        = h
+        batch.edge_attr = m
+        return batch
+
 class GCNConvGNNLayer(nn.Module):
 
     def __init__(self, layer_config: LayerConfig, add_self_loops: bool = True,
@@ -298,7 +424,6 @@ class GCNConvGNNLayer(nn.Module):
             return batch
         else:
             return y
-
 
 class GatedGCNConvGNNLayer(nn.Module):
 
