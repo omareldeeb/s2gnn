@@ -204,7 +204,7 @@ def load_dataset_master(format, name, dataset_dir):
 
     elif format == 'torch_geometric':
         if name == 'md17':
-            dataset = WrappedMD17(root=dataset_dir, name="ethanol")
+            dataset = WrappedMD17(root=dataset_dir, name="ethanol CCSD(T)")
             s_dict = dataset.get_idx_split()
             dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
 

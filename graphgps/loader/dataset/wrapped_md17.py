@@ -1,6 +1,7 @@
 import copy
 
 import numpy as np
+from torch.utils.data import ConcatDataset
 from torch_geometric.data import InMemoryDataset, Data
 from torch_geometric.datasets import MD17
 import torch_geometric.transforms as T
@@ -8,15 +9,16 @@ from tqdm import tqdm
 
 
 def normalize_md17_energy(dataset, train_indices):
+    # Compute mean in eV/Å (from kcal/mol)
     mean_energy = 0.0
     for idx in train_indices:
         item = dataset[idx]
-        mean_energy += item.energy
+        mean_energy += item.energy * 0.0433641  # kcal/mol to eV
     mean_energy /= len(train_indices)
     return mean_energy
 
 class WrappedMD17(InMemoryDataset):
-    def __init__(self, root: str, name: str, train: bool = True, transform=None, pre_transform=None, pre_filter=None, radius: float = 10.0, num_neighbors: int = 32):
+    def __init__(self, root: str, name: str, transform=None, pre_transform=None, pre_filter=None, radius: float = 10.0, num_neighbors: int = 32):
         """
         Initializes the custom dataset.
 
@@ -40,11 +42,18 @@ class WrappedMD17(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_filter)
 
         self.name = name
-        self.train = train
         # Load the original MD17 dataset
-        self.md17_dataset = MD17(root=root, name=name)
+        try:
+            self.md17_dataset = MD17(root=root, name=name, train=None)
+        except ValueError as e:
+            # Some MD17 datasets are split into train and test sets and don't accept `train=None`.
+            # In this case, we load both train and test datasets separately and concatenate them.
+            train_dataset = MD17(root=root, name=name, train=True)
+            test_dataset = MD17(root=root, name=name, train=False)
+            self.md17_dataset = ConcatDataset([train_dataset, test_dataset])
+
         # self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
-        self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors), T.Distance(norm=False)])
+        self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)])
         self.splits = None
 
         splits = self.get_idx_split()
@@ -67,7 +76,7 @@ class WrappedMD17(InMemoryDataset):
 
 
     def len(self):
-        return 1000#len(self.md17_dataset)
+        return len(self.md17_dataset)
 
     def get(self, idx):
         if self._data:
@@ -81,20 +90,18 @@ class WrappedMD17(InMemoryDataset):
         md17_data = self.md17_dataset[idx]
         md17_data = self.compute_edge_indices_norm(md17_data)
 
-        # pos = md17_data.pos
-        # row, col = md17_data.edge_index
-        # edge_weight = (pos[row] - pos[col]).norm(dim=-1)
+        energy_eV = md17_data.energy * 0.0433641
+        normalized_energy = energy_eV - self.mean_energy
 
-        normalized_energy = md17_data.energy - self.mean_energy
+        forces_eV = md17_data.force * 0.0433641
 
         encapsulated_data = Data(
             x=md17_data.z.unsqueeze(1),
             pos=md17_data.pos,
             edge_index=md17_data.edge_index,
-            edge_attr=md17_data.edge_attr,
-            edge_weight=md17_data.edge_attr.view(-1),
             y=normalized_energy.squeeze(),
             z=md17_data.z,
+            force=forces_eV
         )
 
         return encapsulated_data
