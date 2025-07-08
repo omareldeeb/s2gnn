@@ -13,6 +13,7 @@ from torch_geometric.graphgym.register import register_train, loss_dict
 from torch_geometric.graphgym.utils.epoch import is_eval_epoch, is_ckpt_epoch
 from torch_sparse import SparseTensor
 import torch.nn.functional as F
+from tqdm import tqdm
 
 from graphgps.checkpoint import load_ckpt, save_ckpt, clean_ckpt, get_ckpt_dir
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
@@ -25,10 +26,26 @@ def train_epoch(logger, loader, model, avg_model,
     optimizer.zero_grad()
     time_start = time.time()
     # with torch.autograd.detect_anomaly():
-    for iter, batch in enumerate(loader):
+    for iter, batch in tqdm(enumerate(loader), desc="Training epoch"):
+        iter_start = time.time()
         batch.split = 'train'
         batch.to(torch.device(cfg.device))
+
+        if cfg.derive_forces:
+            batch.pos.requires_grad = True
         pred, true = model(batch)
+
+        if cfg.derive_forces:
+            grad_outputs = torch.ones_like(pred)
+            grads = torch.autograd.grad(
+                outputs=pred,
+                inputs=batch.pos,
+                grad_outputs=grad_outputs,
+                retain_graph=True,
+                create_graph=True,
+            )[0]  # grads has shape [32, 3]
+            predicted_forces = -grads.view(-1, 3)  # Convert to shape [batch_size * num_atoms, 3]
+
         if cfg.dataset.name == 'source-dist':
             # Get predictions to a reasonable range
             num_nodes_per_graph = batch.ptr.diff()[batch.batch][:, None]
@@ -38,14 +55,27 @@ def train_epoch(logger, loader, model, avg_model,
             _true = true
             _pred = pred_score
         else:
-            loss, pred_score = compute_loss(pred, true)
+            if cfg.derive_forces:
+                rho = 0.999
+                energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
+
+                force_error = predicted_forces - batch.force
+                forces_mae = (force_error.abs().sum(dim=1)).mean()
+                force_rmse = torch.sqrt((force_error ** 2).sum(dim=1).mean())  # Mean over atoms, then sqrt
+                forces_loss = rho * force_rmse
+
+                loss = energy_loss + forces_loss
+            else:
+                loss, pred_score = compute_loss(pred, true)
+                forces_mae = torch.tensor(torch.nan, device=pred.device)
+
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = pred_score.detach().to('cpu', non_blocking=True)
+            _pred = pred.detach().to('cpu', non_blocking=True)
         loss.backward()
         # Parameters update after accumulating gradients for given num. batches.
         if ((iter + 1) % batch_accumulation == 0) or (iter + 1 == len(loader)):
             if cfg.optim.clip_grad_norm:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
             optimizer.zero_grad()
 
@@ -56,6 +86,12 @@ def train_epoch(logger, loader, model, avg_model,
         if batch.split in cfg.train.ckpt_data_splits:
             # For storing the raw data
             data = batch.cpu()
+        
+        if cfg.derive_forces:
+            extra_stats = {
+                'forces_mae': forces_mae.detach().cpu().item(),
+                'forces_mae_meV': forces_mae.detach().cpu().item() * 1000,
+            }
         logger.update_stats(true=_true,
                             pred=_pred,
                             data=data,
@@ -63,7 +99,9 @@ def train_epoch(logger, loader, model, avg_model,
                             lr=scheduler.get_last_lr()[0],
                             time_used=time.time() - time_start,
                             params=cfg.params,
-                            dataset_name=cfg.dataset.name)
+                            dataset_name=cfg.dataset.name,
+                            loss_meV=loss.detach().cpu().item() * 1000,
+                            **extra_stats)
         time_start = time.time()
 
 
@@ -83,7 +121,7 @@ def maybe_pad(elements: List[torch.Tensor], dim: int = 1):
             el, pad, "constant", fill_value)
 
 
-@torch.no_grad()
+# @torch.no_grad()  # For forces derivation, TODO: should not be removed globally
 def eval_epoch(logger, loader, model, split='val'):
     model.eval()
     time_start = time.time()
@@ -125,7 +163,11 @@ def eval_epoch(logger, loader, model, split='val'):
         else:
             batch.to(torch.device(cfg.device))
             batch.split = split
+
+            if cfg.derive_forces:
+                batch.pos.requires_grad = True
             out = model(batch)
+
             if len(out) == 2:
                 pred, true = out
                 extra_stats = {}
@@ -137,15 +179,44 @@ def eval_epoch(logger, loader, model, split='val'):
             _true = true
             _pred = pred_score
         else:
-            loss, pred_score = compute_loss(pred, true)
+            if cfg.derive_forces:
+                grad_outputs = torch.ones_like(pred)
+                grads = torch.autograd.grad(
+                    outputs=pred,
+                    inputs=batch.pos,
+                    grad_outputs=grad_outputs,
+                    retain_graph=True,
+                    create_graph=True,
+                )[0]
+                predicted_forces = -grads.view(-1, 3)
+
+                rho = 0.999
+                energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
+
+                force_error = predicted_forces - batch.force
+                forces_mae = (force_error.abs().sum(dim=1)).mean()
+                force_rmse = torch.sqrt((force_error ** 2).sum(dim=1).mean())  # Mean over atoms, then sqrt
+                forces_loss = rho * force_rmse
+
+                loss = energy_loss + forces_loss
+            else:
+                loss, pred = compute_loss(pred, true)
+                forces_mae = torch.tensor(torch.nan, device=pred.device)
+
             _true = true.detach().to('cpu', non_blocking=True)
-            _pred = pred_score.detach().to('cpu', non_blocking=True)
+            _pred = pred.detach().to('cpu', non_blocking=True)
 
         data = None
         if (not isinstance(batch, list)
                 and batch.split in cfg.train.ckpt_data_splits):
             # For storing the raw data
             data = batch.cpu()
+
+        if cfg.derive_forces:
+            extra_stats = {
+                'forces_mae': forces_mae.detach().cpu().item(),
+                'forces_mae_meV': forces_mae.detach().cpu().item() * 1000,
+            }
         logger.update_stats(true=_true,
                             pred=_pred,
                             data=data,
@@ -153,6 +224,7 @@ def eval_epoch(logger, loader, model, split='val'):
                             lr=0, time_used=time.time() - time_start,
                             params=cfg.params,
                             dataset_name=cfg.dataset.name,
+                            loss_meV=loss.detach().cpu().item() * 1000,
                             **extra_stats)
         time_start = time.time()
     return sample_ids
@@ -256,8 +328,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
     full_epoch_times = []
     perf = [[] for _ in range(num_splits)]
     for cur_epoch in range(start_epoch, cfg.optim.max_epoch):
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        if cfg.device == "cuda":
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
         start_time = time.perf_counter()
         pred, data = [], []
@@ -268,8 +341,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         data.append(loggers[0]._data)
         perf[0].append(loggers[0].write_epoch(cur_epoch))
 
-        torch.cuda.empty_cache()
-        torch.cuda.synchronize()
+        if cfg.device == "cuda":
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
         if (cfg.optim.model_averaging
                 and cur_epoch >= cfg.optim.model_averaging_start):
