@@ -14,8 +14,8 @@ dataset:
   node_encoder: True
   node_encoder_name: Embedding+MagLapPE
   node_encoder_bn: False
-  edge_encoder: False
-  edge_encoder_name: Bond
+  edge_encoder: True
+  edge_encoder_name: GemEdge 
   edge_encoder_bn: False
 posenc_MagLapPE:
   enable: True
@@ -55,6 +55,36 @@ gnn:
   dropout: 0.1
   agg: sum
   use_edge_attr: True
+
+  #---------------------<GemNet>--------------------
+  num_spherical: 7
+  num_radial: 6
+
+  #-----Has to match dim_inner for now -----------
+  emb_size_atom: 224
+  emb_size_edge: 224
+  #-----------------------------------------------
+  edge_emb_act: swish 
+
+  emb_size_trip: 64
+  emb_size_quad: 32
+  emb_size_rbf: 16
+  emb_size_cbf: 16
+  emb_size_sbf: 32
+  emb_size_bil_trip: 64
+  emb_size_bil_quad: 32
+
+
+  num_radial: 20
+  num_spherical: 5
+  num_before_skip: 1
+  num_after_skip: 1
+  num_concat: 1
+  num_atom: 2
+  num_output_layers: 1
+  cutoff: 5.0
+  #---------------------</GemNet>--------------------
+
   spectral:
     layer_skip: [0, 1, 2, 3, 4]
     frequency_cutoff: 0.7
@@ -76,5 +106,6 @@ optim:
   model_averaging: ema
 share:
   dim_in: 236
-device: cuda
+device: cpu
 num_workers: 4
+derive_forces: True
