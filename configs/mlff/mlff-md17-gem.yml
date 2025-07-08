@@ -14,8 +14,8 @@ dataset:
   node_encoder: True
   node_encoder_name: Embedding+MagLapPE
   node_encoder_bn: False
-  edge_encoder: False
-  edge_encoder_name: Bond
+  edge_encoder: True
+  edge_encoder_name: GemEdge 
   edge_encoder_bn: False
 posenc_MagLapPE:
   enable: True
@@ -52,13 +52,35 @@ gnn:
   use_edge_attr: True
   stage_type: stack
   batchnorm: False
-  act: gelu
+  act: swish
   dropout: 0.25
   agg: sum
+  #GemNet
+
+  num_spherical: 7
+  num_radial: 6
+
+  #-----Has to match dim_inner for now -----------
+  emb_size_atom: 224
+  emb_size_edge: 224
+  #-----------------------------------------------
+  edge_emb_act: swish 
+
+  emb_size_trip: 64
+  emb_size_quad: 32
+  emb_size_rbf: 16
+  emb_size_cbf: 16
+  emb_size_sbf: 32
+  emb_size_bil_trip: 64
+  emb_size_bil_quad: 32
+
+
   num_radial: 20
   num_spherical: 5
   num_before_skip: 1
   num_after_skip: 1
+  num_concat: 1
+  num_atom: 2
   num_output_layers: 1
   cutoff: 5.0
   spectral:

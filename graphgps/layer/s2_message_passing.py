@@ -268,37 +268,46 @@ class SharedGemNetProjections(nn.Module):
 
 
 class GemNetInteractionBlockGNNLayer(nn.Module):
-    def __init__(self, layer_config, *,  cutoff=5.0, num_radial=6, shared_projections: SharedGemNetProjections = None,
-                 num_spherical=7, emb_size=224, **cfg):
+    def __init__(self, layer_config, *, shared_projections: SharedGemNetProjections = None, **args):
         super().__init__()
 
         # ——— dimensions ————————————————————————————————
-        self.emb_size_atom  = emb_size
-        self.emb_size_edge  = emb_size
-        self.emb_size_rbf   = emb_size  
-        self.emb_size_cbf   = emb_size
-        self.emb_size_trip  = emb_size   # down-projection size
+        self.emb_size_atom  = cfg.gnn.emb_size_atom
+        self.emb_size_edge  = cfg.gnn.emb_size_edge
+        self.emb_size_quad  = 0                   # not used
+        self.emb_size_rbf   = cfg.gnn.emb_size_rbf
+        self.emb_size_cbf   = cfg.gnn.emb_size_cbf
+        self.emb_size_bil_trip = cfg.gnn.emb_size_bil_trip
+        self.emb_size_trip  = cfg.gnn.emb_size_trip  # down-projection size
+        self.num_radial = cfg.gnn.num_radial
+        self.num_spherical = cfg.gnn.num_spherical
+        self.num_before_skip = cfg.gnn.num_before_skip
+        self.num_after_skip = cfg.gnn.num_after_skip
+        self.num_concat = cfg.gnn.num_concat
+        self.num_atom = cfg.gnn.num_atom
+        self.act = cfg.gnn.act
+        self.cutoff = cfg.gnn.cutoff
         # ——— basis layers ————————————————————————————————
 
 
-        self.rbf_basis  = BesselBasisLayer(num_radial, cutoff=cutoff)
-        self.cbf_basis3 = SphericalBasisLayer(num_spherical, num_radial,
-                                              cutoff=cutoff, efficient=True)
+        self.rbf_basis  = BesselBasisLayer(self.num_radial, cutoff=self.cutoff)
+        self.cbf_basis3 = SphericalBasisLayer(self.num_spherical, self.num_radial, 
+                                              cutoff=self.cutoff, efficient=True)
         # shared MLPs exactly like GemNet
         if shared_projections is not None:  # use pre-defined shared projections
             self.mlp_rbf3  = shared_projections.mlp_rbf3
             self.mlp_cbf3  = shared_projections.mlp_cbf3
             self.mlp_rbf_h = shared_projections.mlp_rbf_h
         else:  # create new shared projections
-            self.mlp_rbf3  = Dense(num_radial, self.emb_size_rbf, activation=None, bias=False)
+            self.mlp_rbf3  = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
             self.mlp_cbf3  = EfficientInteractionDownProjection(
-                                num_spherical, num_radial, self.emb_size_cbf)
-            self.mlp_rbf_h = Dense(num_radial, self.emb_size_rbf, activation=None, bias=False)
+                                self.num_spherical, self.num_radial, self.emb_size_cbf)
+            self.mlp_rbf_h = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
 
         # atom / edge embedding blocks (copied from GemNet)
-        self.atom_emb = AtomEmbedding(self.emb_size_atom)
-        self.edge_emb = EdgeEmbedding(self.emb_size_atom, num_radial,
-                                      self.emb_size_edge)
+        # self.atom_emb = AtomEmbedding(self.emb_size_atom)
+        # self.edge_emb = EdgeEmbedding(self.emb_size_atom, self.num_radial,
+        #                               self.emb_size_edge)
 
         # InteractionBlock itself
         self.block = InteractionBlockTripletsOnly(
@@ -309,11 +318,11 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             emb_size_rbf      = self.emb_size_rbf,
             emb_size_cbf      = self.emb_size_cbf,
             emb_size_bil_trip = self.emb_size_trip,
-            num_before_skip   = 1,
-            num_after_skip    = 1,
-            num_concat        = 1,
-            num_atom          = 1,
-            activation        = 'gelu'
+            num_before_skip   = self.num_before_skip,
+            num_after_skip    = self.num_after_skip,
+            num_concat        = self.num_concat,
+            num_atom          = self.num_atom,
+            activation        = self.act,
         )
 
     def forward(self, batch):
@@ -350,6 +359,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         # 5) initial atom + edge embeddings
         # h = self.atom_emb(Z)                        # (nAtoms, emb_size_atom)
         h=Z
+        m = batch.edge_attr  # (nEdges, emb_size_edge) ; use edge_attr directly if it is already provided
 
         #TODO embed before interaction block
         # Check Gemnet Paper fig p.19 and Eq. (32) again 

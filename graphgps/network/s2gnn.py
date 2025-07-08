@@ -11,6 +11,7 @@ from torch_geometric.graphgym.register import register_network
 from torch_geometric.graphgym.models.gnn import FeatureEncoder
 
 from graphgps.layer.chebnet_conv_layer import ChebNetIILayer
+from graphgps.layer.gemnet.embedding_block import EdgeBatchTransform, InitialEdgeEmbedding
 from graphgps.layer.s2_message_passing import *  # noqa f403
 from graphgps.layer.s2_spectral import *  # noqa f403
 
@@ -89,6 +90,9 @@ class S2GNN(nn.Module):
         else:
             self.encoder = FeatureEncoder(cfg.gnn.dim_inner)
             dim_in = self.encoder.dim_in
+
+        # if cfg.dataset.edge_encoder_name == 'GemEdge':
+        #     self.edge_embedding = InitialEdgeEmbedding()
 
         # Optional MLP prior to message passing
         if cfg.gnn.layers_pre_mp > 0:
@@ -195,14 +199,12 @@ class S2GNN(nn.Module):
                            normalize=adj_norm)
 
         elif model_type == 'gemnet':
-            num_radial=6,
-            num_spherical=7
-            emb_size = cfg.gnn.dim_inner
-            shared_projections = None#SharedGemNetProjections(num_radial=num_radial, num_spherical=num_spherical, emb_size_cbf=emb_size, emb_size_rbf=emb_size)
+            shared_projections = SharedGemNetProjections(num_radial=cfg.gnn.num_radial, num_spherical=cfg.gnn.num_spherical, 
+                                                         emb_size_rbf=cfg.gnn.emb_size_rbf, emb_size_cbf=cfg.gnn.emb_size_cbf)
             return partial(GemNetInteractionBlockGNNLayer,
-                   make_undirected=make_undirected,
-                   use_edge_attr=use_edge_attr,
-                   normalize=adj_norm,
+                #    make_undirected=make_undirected,
+                #    use_edge_attr=use_edge_attr,
+                #    normalize=adj_norm,
                    shared_projections=shared_projections)
         elif model_type == 'gatconv':
             return GATConvGNNLayer
