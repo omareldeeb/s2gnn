@@ -42,7 +42,6 @@ class WrappedMD17(InMemoryDataset):
         super().__init__(root, transform, pre_transform, pre_filter)
 
         self.name = name
-        self.train = train
         # Load the original MD17 dataset
         try:
             self.md17_dataset = MD17(root=root, name=name, train=None)
