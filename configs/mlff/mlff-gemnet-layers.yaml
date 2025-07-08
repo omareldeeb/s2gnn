@@ -1,5 +1,5 @@
 out_dir: tests/results
-metric_best: mae
+metric_best: forces_mae
 metric_agg: argmin
 wandb:
   use: True
@@ -96,11 +96,11 @@ gnn:
 optim:
   clip_grad_norm: True
   optimizer: adamW
-  weight_decay: 0.0001
+  weight_decay: 2e-6
   base_lr: 1e-3
   max_epoch: 250
   scheduler: linear_with_warmup
-  num_warmup_epochs: 5
+  num_warmup_epochs: 10
   model_averaging: ema
 share:
   dim_in: 236
