@@ -354,7 +354,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
 
         #TODO embed before interaction block
         # Check Gemnet Paper fig p.19 and Eq. (32) again 
-        if not batch.edge_attr.shape[1] != 1:
+        if not hasattr(batch, "edge_attr") or batch.edge_attr is None or batch.edge_attr.shape[1] == 1:
             m = self.edge_emb(h, rbf, src, dst)         # (nEdges, emb_size_edge)
         else:
             m = batch.edge_attr  # use edge_attr directly if it is already provided
