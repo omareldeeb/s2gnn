@@ -22,7 +22,8 @@ import torch_scatter as scatter
 
 from graphgps.layer.gat_conv_layer import GATConv
 from graphgps.layer.gatedgcn_layer import GatedGCNLayer
-# from torch_geometric.nn.models.schnet import SchNet, InteractionBlock, ShiftedSoftplus
+from torch_geometric.nn.models.schnet import SchNet, InteractionBlock as SchnetInteractionBlock
+from torch_geometric.nn.models.schnet import ShiftedSoftplus
 
 from graphgps.layer.gemnet.base_layers import Dense
 from graphgps.layer.gemnet.basis_layers import BesselBasisLayer, SphericalBasisLayer
@@ -617,7 +618,7 @@ class InteractionBlockGNNLayer(nn.Module):
         self.distance_expansion = GaussianSmearing(0.0, cutoff, n_gaussians)
 
         dim_in, dim_out = layer_config.dim_in, layer_config.dim_out
-        self.interaction = InteractionBlock(
+        self.interaction = SchnetInteractionBlock(
             dim_out,
             n_gaussians,
             n_filters,
@@ -632,7 +633,7 @@ class InteractionBlockGNNLayer(nn.Module):
 
         # Assumes batch has edge_index and edge_weight computed using RadiusGraph
         edge_attr = self.distance_expansion(batch.edge_weight)
-        y = y + self.interaction(y, batch.edge_index, batch.edge_weight, edge_attr)
+        y = self.interaction(y, batch.edge_index, batch.edge_weight, edge_attr)
 
         y = self.lin1(y)
         y = self.dropout(self.activation(y))
