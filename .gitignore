@@ -19,6 +19,7 @@ lightning_logs
 .ipynb_checkpoints/
 .vscode
 /notebooks/**/*.pdf
+data/
 
 # Others
 .DS_Store
