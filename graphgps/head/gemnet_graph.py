@@ -1,7 +1,9 @@
+import torch
 import torch.nn as nn
 import torch_geometric.graphgym.register as register
 from torch_geometric.graphgym import cfg
 from torch_geometric.graphgym.register import register_head
+from torch_scatter import scatter
 
 from graphgps.layer.gemnet.atom_update_block import OutputBlock
 
@@ -41,5 +43,9 @@ class GemNetGraphHead(nn.Module):
         rbf_out = self.mlp_rbf_out(rbf)
 
         E, _ = self.out_block(h, m, rbf_out, dst)
+        E += batch.E
+
+        nMolecules = torch.max(batch.batch) + 1
+        E = scatter(E, batch.batch, dim=0, dim_size=nMolecules, reduce="add")
 
         return E, batch.y
