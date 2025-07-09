@@ -59,6 +59,7 @@ gnn:
   #---------------------<GemNet>--------------------
   num_spherical: 7
   num_radial: 6
+  shared_projections: False
 
   #-----Has to match dim_inner for now -----------
   emb_size_atom: 224
