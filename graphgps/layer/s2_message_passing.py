@@ -267,7 +267,7 @@ class SharedGemNetProjections(nn.Module):
         self.mlp_cbf3 = EfficientInteractionDownProjection(
             num_spherical, num_radial, emb_size_cbf)
         self.mlp_rbf_h = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
-        self.mlp_rbf_out = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
+        self.mlp_rbf_out = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
 
 
 class GemNetInteractionBlockGNNLayer(nn.Module):
