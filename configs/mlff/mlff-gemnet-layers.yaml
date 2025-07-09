@@ -51,7 +51,7 @@ gnn:
   layer_type: gemnet
   stage_type: stack
   batchnorm: False
-  act: gelu
+  act: swish
   dropout: 0.1
   agg: sum
   use_edge_attr: True
@@ -75,9 +75,6 @@ gnn:
   emb_size_bil_trip: 64
   emb_size_bil_quad: 32
 
-
-  num_radial: 20
-  num_spherical: 5
   num_before_skip: 1
   num_after_skip: 1
   num_concat: 1
@@ -107,6 +104,6 @@ optim:
   model_averaging: ema
 share:
   dim_in: 236
-device: cpu
+device: cuda
 num_workers: 4
 derive_forces: True
