@@ -114,7 +114,7 @@ class S2GNN(nn.Module):
                                            cfg.gnn.make_undirected,
                                            cfg.gnn.use_edge_attr,
                                            cfg.gnn.adj_norm,
-                                           cfg.gnn.dir_aggr, shared_gemnet_projections=shared_gemnet_projections)
+                                           cfg.gnn.dir_aggr, shared_projections=shared_gemnet_projections)
         spec_model = self.build_spectral_layer()
         layers = []
 
@@ -183,7 +183,8 @@ class S2GNN(nn.Module):
         is_first = (
             cfg.gnn.layers_mp <= 0 or
             (cfg.gnn.layer_type == 'lin_gnn' and cfg.gnn.layers_mp == 1))
-        self.post_mp = GNNHead(cfg.gnn.dim_inner, dim_out, is_first)
+        mlp_rbf_out = shared_gemnet_projections.mlp_rbf_out if shared_gemnet_projections else None
+        self.post_mp = GNNHead(cfg.gnn.dim_inner, dim_out, is_first, mlp_rbf_out=mlp_rbf_out)
 
     def build_spatial_layer(self, model_type, make_undirected, use_edge_attr,
                             adj_norm, dir_aggr, **kwargs):
