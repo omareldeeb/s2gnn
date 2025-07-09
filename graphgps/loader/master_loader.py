@@ -3,6 +3,7 @@ import os.path as osp
 import time
 from functools import partial
 from itertools import product
+import os
 
 import numpy as np
 import torch
@@ -20,6 +21,7 @@ from torch_geometric.graphgym.register import register_loader
 from graphgps.loader.dataset.wrapped_md17 import WrappedMD17
 from graphgps.loader.dataset.wrapped_qm9 import WrappedQM9
 from graphgps.loader.dataset.wrapped_des370k import WrappedDES370K
+from graphgps.loader.dataset.wrapped_coll import WrappedColl  
 from graphgps.loader.loader import (load_pyg,
                                     load_ogb,
                                     load_arxiv_year,
@@ -215,6 +217,16 @@ def load_dataset_master(format, name, dataset_dir):
 
         elif name == "des370k":
             dataset = WrappedDES370K(root=dataset_dir)
+            s_dict = dataset.get_idx_split()
+            dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
+        
+        elif name == "coll":
+            dataset = WrappedColl(root=os.path.join(dataset_dir, "coll"))
+            s_dict = dataset.get_idx_split()
+            dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
+
+        elif name == "processed_coll_small":
+            dataset = WrappedColl(root=os.path.join(dataset_dir, "processed_coll_small"))
             s_dict = dataset.get_idx_split()
             dataset.split_idxs = [s_dict[s] for s in ['train', 'val', 'test']]
 

@@ -22,3 +22,9 @@ python main.py --cfg configs/mlff/mlff-gemnet-layers.yaml \
                out_dir tests/results/mlff \
                wandb.use True \
                seed 1
+
+
+# python main.py --cfg configs/mlff/mlff-coll.yaml \
+#                out_dir tests/results/mlff \
+#                wandb.use False \
+#                seed 1

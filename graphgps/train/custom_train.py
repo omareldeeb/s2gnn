@@ -57,6 +57,7 @@ def train_epoch(logger, loader, model, avg_model,
         else:
             if cfg.derive_forces:
                 rho = 0.999
+                true = true.view_as(pred)
                 energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
 
                 force_error = predicted_forces - batch.force
@@ -191,6 +192,7 @@ def eval_epoch(logger, loader, model, split='val'):
                 predicted_forces = -grads.view(-1, 3)
 
                 rho = 0.999
+                true = true.view_as(pred)
                 energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
 
                 force_error = predicted_forces - batch.force
