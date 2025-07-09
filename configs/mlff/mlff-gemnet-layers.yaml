@@ -47,7 +47,7 @@ gnn:
   layers_pre_mp: 0
   layers_mp: 4
   layers_post_mp: 3
-  dim_inner: 224
+  dim_inner: 128
   layer_type: gemnet
   stage_type: stack
   batchnorm: False
@@ -59,11 +59,11 @@ gnn:
   #---------------------<GemNet>--------------------
   num_spherical: 7
   num_radial: 6
-  shared_projections: False
+  shared_projections: True
 
   #-----Has to match dim_inner for now -----------
-  emb_size_atom: 224
-  emb_size_edge: 224
+  emb_size_atom: 128
+  emb_size_edge: 128
   #-----------------------------------------------
   edge_emb_act: swish 
 

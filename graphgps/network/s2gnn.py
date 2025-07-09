@@ -202,7 +202,7 @@ class S2GNN(nn.Module):
             shared_projections = None
 
             if cfg.gnn.shared_projections: 
-                SharedGemNetProjections(num_radial=cfg.gnn.num_radial, num_spherical=cfg.gnn.num_spherical, 
+                shared_projections = SharedGemNetProjections(num_radial=cfg.gnn.num_radial, num_spherical=cfg.gnn.num_spherical, 
                                                          emb_size_rbf=cfg.gnn.emb_size_rbf, emb_size_cbf=cfg.gnn.emb_size_cbf)
             return partial(GemNetInteractionBlockGNNLayer,
                 #    make_undirected=make_undirected,
