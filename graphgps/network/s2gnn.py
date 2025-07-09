@@ -104,12 +104,17 @@ class S2GNN(nn.Module):
         if cfg.gnn.node_dropout:
             self.node_dropout = Dropout1d(cfg.gnn.node_dropout)
 
+        shared_gemnet_projections = None
+        if cfg.gnn.shared_projections:
+            shared_gemnet_projections = SharedGemNetProjections(num_radial=cfg.gnn.num_radial, num_spherical=cfg.gnn.num_spherical, 
+                                                         emb_size_rbf=cfg.gnn.emb_size_rbf, emb_size_cbf=cfg.gnn.emb_size_cbf)
+
         # Init GNN layers
         spat_model = self.build_spatial_layer(cfg.gnn.layer_type,
                                            cfg.gnn.make_undirected,
                                            cfg.gnn.use_edge_attr,
                                            cfg.gnn.adj_norm,
-                                           cfg.gnn.dir_aggr)
+                                           cfg.gnn.dir_aggr, shared_gemnet_projections=shared_gemnet_projections)
         spec_model = self.build_spectral_layer()
         layers = []
 
@@ -181,7 +186,7 @@ class S2GNN(nn.Module):
         self.post_mp = GNNHead(cfg.gnn.dim_inner, dim_out, is_first)
 
     def build_spatial_layer(self, model_type, make_undirected, use_edge_attr,
-                            adj_norm, dir_aggr):
+                            adj_norm, dir_aggr, **kwargs):
         """Prototype/constructor for spatial layer (message passing)."""
         if model_type == 'none' or model_type is None:
             return None
@@ -201,9 +206,9 @@ class S2GNN(nn.Module):
         elif model_type == 'gemnet':
             shared_projections = None
 
-            if cfg.gnn.shared_projections: 
-                shared_projections = SharedGemNetProjections(num_radial=cfg.gnn.num_radial, num_spherical=cfg.gnn.num_spherical, 
-                                                         emb_size_rbf=cfg.gnn.emb_size_rbf, emb_size_cbf=cfg.gnn.emb_size_cbf)
+            if cfg.gnn.shared_projections:
+                assert 'shared_projections' in kwargs
+                shared_projections = kwargs['shared_projections']
             return partial(GemNetInteractionBlockGNNLayer,
                 #    make_undirected=make_undirected,
                 #    use_edge_attr=use_edge_attr,
