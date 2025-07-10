@@ -7,8 +7,8 @@ wandb:
   entity: daniel-rothenpieler-technical-university-of-munich
 dataset:
   format: torch_geometric
-  name: md17
-  task: graph
+  name: des370k
+  tas: graph
   task_type: regression
   transductive: False
   node_encoder: True

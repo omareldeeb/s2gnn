@@ -268,6 +268,16 @@ class SharedGemNetProjections(nn.Module):
         self.mlp_rbf_h = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
 
 
+def compute_distances(batch):
+        pos = batch.pos
+        edge_index = batch.edge_index
+
+        src, dst = edge_index
+
+        vec = pos[dst] - pos[src]
+        dist = vec.norm(dim=1)  # (nEdges,)
+        return dist 
+
 class GemNetInteractionBlockGNNLayer(nn.Module):
     def __init__(self, layer_config, *, shared_projections: SharedGemNetProjections = None, **args):
         super().__init__()
@@ -337,8 +347,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         nAtoms   = Z.size(0)
 
         # 1) pair-wise geometry
-        vec = pos[dst] - pos[src]              # (nEdges,3)
-        dist = vec.norm(dim=1)                 # (nEdges,)
+        dist = compute_distances(batch)  # (nEdges,)
         rbf  = self.rbf_basis(dist)            # (nEdges,num_radial)
 
         # 2) triplet indices
@@ -372,7 +381,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             id_c=src, id_a=dst
         )
         # 6) update batch
-        batch.x        = h
+        batch.x = h
         batch.edge_attr = m
         return batch
 
@@ -634,9 +643,10 @@ class InteractionBlockGNNLayer(nn.Module):
     def forward(self, batch):
         y = batch.x
 
+        distances = compute_distances(batch)  # (nEdges,)
         # Assumes batch has edge_index and edge_weight computed using RadiusGraph
-        edge_attr = self.distance_expansion(batch.edge_weight)
-        y = self.interaction(y, batch.edge_index, batch.edge_weight, edge_attr)
+        edge_attr = self.distance_expansion(distances)
+        y = self.interaction(y, batch.edge_index, distances, edge_attr)
 
         y = self.lin1(y)
         y = self.dropout(self.activation(y))
