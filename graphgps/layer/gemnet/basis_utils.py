@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import brentq
 from scipy import special as sp
 import sympy as sym
+import math
 
 
 def Jn(r, n):
@@ -99,8 +100,8 @@ def sph_harm_prefactor(l, m):
     return (
         (2 * l + 1)
         / (4 * np.pi)
-        * np.math.factorial(l - abs(m))
-        / np.math.factorial(l + abs(m))
+        * math.factorial(l - abs(m))
+        / math.factorial(l + abs(m))
     ) ** 0.5
 
 

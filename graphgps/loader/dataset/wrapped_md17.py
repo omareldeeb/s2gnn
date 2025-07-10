@@ -99,7 +99,7 @@ class WrappedMD17(InMemoryDataset):
             x=md17_data.z.unsqueeze(1),
             pos=md17_data.pos,
             edge_index=md17_data.edge_index,
-            y=normalized_energy.squeeze(),
+            y=normalized_energy.unsqueeze(0),  # Ensure y is a 1D tensor
             z=md17_data.z,
             force=forces_eV
         )

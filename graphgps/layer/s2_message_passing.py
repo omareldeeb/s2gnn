@@ -32,6 +32,7 @@ from graphgps.layer.gemnet.embedding_block import AtomEmbedding, EdgeEmbedding
 from graphgps.layer.gemnet.interaction_block import InteractionBlock, InteractionBlockTripletsOnly
 from graphgps.loader.gemnet.utils import compute_triplets
 from graphgps.network.gemnet import GemNet
+from graphgps.layer.gemnet.atom_update_block import OutputBlock
 # from torch_geometric.nn.models.dimenet import BesselBasisLayer, SphericalBasisLayer
 
 
@@ -266,6 +267,7 @@ class SharedGemNetProjections(nn.Module):
         self.mlp_cbf3 = EfficientInteractionDownProjection(
             num_spherical, num_radial, emb_size_cbf)
         self.mlp_rbf_h = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
+        self.mlp_rbf_out = Dense(num_radial, emb_size_rbf, activation=None, bias=False)
 
 
 def compute_distances(batch):
@@ -309,11 +311,13 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             self.mlp_rbf3  = shared_projections.mlp_rbf3
             self.mlp_cbf3  = shared_projections.mlp_cbf3
             self.mlp_rbf_h = shared_projections.mlp_rbf_h
+            self.mlp_rbf_out = shared_projections.mlp_rbf_out
         else:  # create new shared projections
             self.mlp_rbf3  = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
             self.mlp_cbf3  = EfficientInteractionDownProjection(
                                 self.num_spherical, self.num_radial, self.emb_size_cbf)
             self.mlp_rbf_h = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
+            self.mlp_rbf_out = Dense(self.num_radial, self.emb_size_rbf, activation=None, bias=False)
 
         # atom / edge embedding blocks (copied from GemNet)
         # self.atom_emb = AtomEmbedding(self.emb_size_atom)
@@ -336,6 +340,18 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             activation        = self.act,
         )
 
+        self.out_block = OutputBlock(
+            emb_size_atom=self.emb_size_atom,
+            emb_size_edge=self.emb_size_edge,
+            emb_size_rbf=self.emb_size_rbf,
+            nHidden=self.num_atom,
+            num_targets=1,
+            activation=self.act,
+            direct_forces=False,    # TODO: make configurable
+            output_init="HeOrthogonal",
+            name=f"OutputBlock_{hex(id(self))}" # We don't need the name but I'm assuming it needs to be globally unique?
+        )
+
     def forward(self, batch):
         pos        = batch.pos                  # (nAtoms,3)
         edge_index = batch.edge_index           # (2,nEdges)
@@ -349,6 +365,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         # 1) pair-wise geometry
         dist = compute_distances(batch)  # (nEdges,)
         rbf  = self.rbf_basis(dist)            # (nEdges,num_radial)
+        batch.rbf = rbf # TODO: Hack to avoid recomputing this in the final output block
 
         # 2) triplet indices
         id3_expand_ba, id3_reduce_ca, id_swap, Kidx3 = compute_triplets(
@@ -365,11 +382,19 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         rbf3  = self.mlp_rbf3(rbf)                  # (nEdges, emb_size_rbf)
         cbf3  = self.mlp_cbf3(cbf_basis)            # (nEdges, emb_size_cbf)
         rbf_h = self.mlp_rbf_h(rbf)                 # (nEdges, emb_size_rbf)
+        rbf_out = self.mlp_rbf_out(rbf)               # (nEdges, emb_size_rbf)
 
         # 5) initial atom + edge embeddings
         # h = self.atom_emb(Z)                        # (nAtoms, emb_size_atom)
         h=Z
         m = batch.edge_attr  # (nEdges, emb_size_edge) ; use edge_attr directly if it is already provided
+
+        # TODO: assuming direct_forces=False so ignore the forces here
+        E, _ = self.out_block(h, m, rbf_out, dst)
+        if hasattr(batch, 'E'):
+            batch.E += E
+        else:
+            batch.E = E
 
         h, m = self.block(
             h=h, m=m,
