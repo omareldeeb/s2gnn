@@ -130,7 +130,7 @@ def maybe_pad(elements: List[torch.Tensor], dim: int = 1):
 
 def eval_epoch(logger, loader, model, split='val'):
     if cfg.derive_forces:
-        return eval_epoch(logger, loader, model, split=split)
+        return _eval_epoch(logger, loader, model, split=split)
     
     with torch.no_grad():
         return _eval_epoch(logger, loader, model, split=split)
