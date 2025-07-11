@@ -48,9 +48,9 @@ class WrappedMD17(InMemoryDataset):
         except ValueError as e:
             # Some MD17 datasets are split into train and test sets and don't accept `train=None`.
             # In this case, we load both train and test datasets separately and concatenate them.
-            train_dataset = MD17(root=root, name=name, train=True)
-            test_dataset = MD17(root=root, name=name, train=False)
-            self.md17_dataset = ConcatDataset([train_dataset, test_dataset])
+            self.train_dataset = MD17(root=root, name=name, train=True)
+            self.test_dataset = MD17(root=root, name=name, train=False)
+            self.md17_dataset = ConcatDataset([self.train_dataset, self.test_dataset])
 
         # self.compute_edge_indices = T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)
         self.compute_edge_indices_norm = T.Compose([T.RadiusGraph(r=radius, max_num_neighbors=num_neighbors)])
@@ -115,18 +115,23 @@ class WrappedMD17(InMemoryDataset):
         if self.splits is not None:
             return self.splits
         
-        all_indices = list(range(self.len()))
-        # Shuffle the indices using np
-        np.random.shuffle(all_indices)
+        if hasattr(self, "train_dataset") and hasattr(self, "test_dataset"):
+            num_train = len(self.train_dataset)
+            num_val = int(0.95 * len(self.test_dataset))
+            num_test = len(self.test_dataset) - num_val
+        else:
+            all_indices = list(range(self.len()))
+            # Shuffle the indices using np
+            np.random.shuffle(all_indices)
 
-        num_train = int(0.8 * len(all_indices))
-        num_val = int(0.1 * len(all_indices))
-        num_test = len(all_indices) - num_train - num_val
+            num_train = int(0.8 * len(all_indices))
+            num_val = int(0.1 * len(all_indices))
+            num_test = len(all_indices) - num_train - num_val
 
         self.splits = {
-            'train': all_indices[:num_train],
-            'val': all_indices[num_train:num_train + num_val],
-            'test': all_indices[num_train + num_val:]
+            'train': list(range(num_train)),
+            'val': list(range(num_train, num_train + num_val)),
+            'test': list(range(num_train + num_val, num_train + num_val + num_test))
         }
 
         return self.splits
