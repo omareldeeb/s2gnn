@@ -347,7 +347,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             nHidden=self.num_atom,
             num_targets=1,
             activation=self.act,
-            direct_forces=False,    # TODO: make configurable
+            direct_forces=not cfg.derive_forces,    # TODO: make configurable
             output_init="HeOrthogonal",
             name=f"OutputBlock_{hex(id(self))}" # We don't need the name but I'm assuming it needs to be globally unique?
         )
@@ -390,11 +390,13 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         m = batch.edge_attr  # (nEdges, emb_size_edge) ; use edge_attr directly if it is already provided
 
         # TODO: assuming direct_forces=False so ignore the forces here
-        E, _ = self.out_block(h, m, rbf_out, dst)
-        if hasattr(batch, 'E'):
+        E, F = self.out_block(h, m, rbf_out, dst)
+        if hasattr(batch, 'E') and hasattr(batch, 'F'):
             batch.E += E
+            batch.F += F
         else:
             batch.E = E
+            batch.F = F
 
         h, m = self.block(
             h=h, m=m,

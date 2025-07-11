@@ -29,7 +29,7 @@ class GemNetGraphHead(nn.Module):
             nHidden=self.num_atom,
             num_targets=1,
             activation=self.act,
-            direct_forces=False,    # TODO: make configurable
+            direct_forces=not cfg.derive_forces,
             output_init="HeOrthogonal",
             name=f"OutputBlock_{hex(id(self))}" # We don't need the name but I'm assuming it needs to be globally unique?
         )
@@ -42,10 +42,14 @@ class GemNetGraphHead(nn.Module):
         rbf = batch.rbf
         rbf_out = self.mlp_rbf_out(rbf)
 
-        E, _ = self.out_block(h, m, rbf_out, dst)
+        E, F = self.out_block(h, m, rbf_out, dst)
         E += batch.E
+        F += batch.F
 
         nMolecules = torch.max(batch.batch) + 1
         E = scatter(E, batch.batch, dim=0, dim_size=nMolecules, reduce="add")
 
+        if cfg.derive_forces:
+            return (E, F), batch.y
+        
         return E, batch.y
