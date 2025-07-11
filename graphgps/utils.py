@@ -168,11 +168,3 @@ def even_quantile_labels(vals, nclasses, verbose=True):
         for class_idx, interval in enumerate(interval_lst):
             print(f"Class {class_idx}: [{interval[0]}, {interval[1]})]")
     return label
-
-"https://stackoverflow.com/questions/10724854/how-to-do-a-conditional-decorator-in-python"
-def conditional_decorator(dec, condition):
-    def decorator(func):
-        if not condition:
-            return func
-        return dec(func)
-    return decorator

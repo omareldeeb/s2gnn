@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from graphgps.checkpoint import load_ckpt, save_ckpt, clean_ckpt, get_ckpt_dir
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
-from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name, conditional_decorator
+from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
 
 def train_epoch(logger, loader, model, avg_model,
@@ -127,8 +127,15 @@ def maybe_pad(elements: List[torch.Tensor], dim: int = 1):
             el, pad, "constant", fill_value)
 
 
-@conditional_decorator(torch.no_grad(), not cfg.derive_forces)
 def eval_epoch(logger, loader, model, split='val'):
+    if cfg.derive_forces:
+        return eval_epoch(logger, loader, model, split=split)
+    
+    with torch.no_grad():
+        return _eval_epoch(logger, loader, model, split=split)
+
+
+def _eval_epoch(logger, loader, model, split='val'):
     model.eval()
     time_start = time.time()
     sample_ids = []
