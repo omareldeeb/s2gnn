@@ -49,6 +49,7 @@ gnn:
   layers_post_mp: 3
   dim_inner: 224
   layer_type: interaction
+  shared_projections: False
   use_edge_attr: True
   stage_type: stack
   batchnorm: False

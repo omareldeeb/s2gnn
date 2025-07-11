@@ -5,7 +5,7 @@ from torch_geometric.graphgym import cfg
 
 @register_head('per_atom_head')
 class PerAtomHead(nn.Module):
-    def __init__(self, dim_in, dim_out, is_first):
+    def __init__(self, dim_in, dim_out, is_first, *args, **kwargs):
         super().__init__()
         hidden_dim = cfg.gnn.dim_inner
         self.atom_head = nn.Sequential(

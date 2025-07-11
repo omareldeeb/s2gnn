@@ -60,6 +60,7 @@ class WrappedDES370K(InMemoryDataset):
         return [f'encapsulated_DES370K_{"train" if self.train else "test"}.pt']
 
     def len(self):
+        return 1000
         return len(self.des370k_dataset)
 
     def get(self, idx):
