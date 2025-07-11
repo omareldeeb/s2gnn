@@ -49,7 +49,14 @@ class GemNetGraphHead(nn.Module):
         nMolecules = torch.max(batch.batch) + 1
         E = scatter(E, batch.batch, dim=0, dim_size=nMolecules, reduce="add")
 
-        if cfg.derive_forces:
-            return (E, F), batch.y
+        if not cfg.derive_forces:
+            nAtoms = h.shape[0]
+            v = batch.v  # Get the direction vectors from the batch
+            # map forces in edge directions
+            F_ji = F * v  # (nEdges, 3)
+            F_j = scatter(F_ji, dst, dim=0, dim_size=nAtoms, reduce="add")
+            # (nAtoms, num_targets, 3)
+
+            return (E, F_j), batch.y
         
         return E, batch.y

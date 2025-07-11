@@ -278,7 +278,8 @@ def compute_distances(batch):
 
         vec = pos[dst] - pos[src]
         dist = vec.norm(dim=1)  # (nEdges,)
-        return dist 
+        v = vec / (dist[:, None] + 1e-8)  # Normalize to get direction
+        return dist, v
 
 class GemNetInteractionBlockGNNLayer(nn.Module):
     def __init__(self, layer_config, *, shared_projections: SharedGemNetProjections = None, **args):
@@ -363,9 +364,10 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
         nAtoms   = Z.size(0)
 
         # 1) pair-wise geometry
-        dist = compute_distances(batch)  # (nEdges,)
+        dist, v = compute_distances(batch)  # (nEdges,)
         rbf  = self.rbf_basis(dist)            # (nEdges,num_radial)
         batch.rbf = rbf # TODO: Hack to avoid recomputing this in the final output block
+        batch.v = v  # same here
 
         # 2) triplet indices
         id3_expand_ba, id3_reduce_ca, id_swap, Kidx3 = compute_triplets(
@@ -670,7 +672,7 @@ class InteractionBlockGNNLayer(nn.Module):
     def forward(self, batch):
         y = batch.x
 
-        distances = compute_distances(batch)  # (nEdges,)
+        distances, _ = compute_distances(batch)  # (nEdges,)
         # Assumes batch has edge_index and edge_weight computed using RadiusGraph
         edge_attr = self.distance_expansion(distances)
         y = self.interaction(y, batch.edge_index, distances, edge_attr)

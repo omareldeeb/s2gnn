@@ -48,6 +48,7 @@ def train_epoch(logger, loader, model, avg_model,
                 predicted_forces = -grads.view(-1, 3)  # Convert to shape [batch_size * num_atoms, 3]
             else:
                 predicted_energies, predicted_forces = pred
+                pred = predicted_energies
 
         if cfg.dataset.name == 'source-dist':
             # Get predictions to a reasonable range
@@ -205,6 +206,7 @@ def _eval_epoch(logger, loader, model, split='val'):
                     predicted_forces = -grads.view(-1, 3)
                 else:
                     predicted_energies, predicted_forces = pred
+                    pred = predicted_energies
 
                 rho = 0.999
                 true = true.view_as(predicted_energies)
