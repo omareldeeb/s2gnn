@@ -347,7 +347,7 @@ class GemNetInteractionBlockGNNLayer(nn.Module):
             nHidden=self.num_atom,
             num_targets=1,
             activation=self.act,
-            direct_forces=not cfg.derive_forces,    # TODO: make configurable
+            direct_forces=not cfg.derive_forces,
             output_init="HeOrthogonal",
             name=f"OutputBlock_{hex(id(self))}" # We don't need the name but I'm assuming it needs to be globally unique?
         )
