@@ -31,19 +31,23 @@ def train_epoch(logger, loader, model, avg_model,
         batch.split = 'train'
         batch.to(torch.device(cfg.device))
 
-        if cfg.derive_forces:
+        if cfg.gnn.head == "gemnet_graph" and cfg.derive_forces:
             batch.pos.requires_grad = True
         pred, true = model(batch)
 
-        if cfg.derive_forces:
-            grad_outputs = torch.ones_like(pred)
-            grads = torch.autograd.grad(
-                outputs=pred,
-                inputs=batch.pos,
-                grad_outputs=grad_outputs,
-                create_graph=True,
-            )[0]  # grads has shape [32, 3]
-            predicted_forces = -grads.view(-1, 3)  # Convert to shape [batch_size * num_atoms, 3]
+        if cfg.gnn.head == "gemnet_graph":
+            if cfg.derive_forces:
+                predicted_energies = pred
+                grad_outputs = torch.ones_like(predicted_energies)
+                grads = torch.autograd.grad(
+                    outputs=predicted_energies,
+                    inputs=batch.pos,
+                    grad_outputs=grad_outputs,
+                    create_graph=True,
+                )[0]  # grads has shape [32, 3]
+                predicted_forces = -grads.view(-1, 3)  # Convert to shape [batch_size * num_atoms, 3]
+            else:
+                predicted_energies, predicted_forces = pred
 
         if cfg.dataset.name == 'source-dist':
             # Get predictions to a reasonable range
@@ -54,7 +58,7 @@ def train_epoch(logger, loader, model, avg_model,
             _true = true
             _pred = pred_score
         else:
-            if cfg.derive_forces:
+            if cfg.gnn.head == "gemnet_graph":
                 rho = 0.999
                 true = true.view_as(pred)
                 energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
@@ -66,7 +70,7 @@ def train_epoch(logger, loader, model, avg_model,
 
                 loss = energy_loss + forces_loss
             else:
-                loss, pred_score = compute_loss(pred, true)
+                loss, pred = compute_loss(pred, true)
                 forces_mae = torch.tensor(torch.nan, device=pred.device)
 
             _true = true.detach().to('cpu', non_blocking=True)
@@ -87,13 +91,13 @@ def train_epoch(logger, loader, model, avg_model,
             # For storing the raw data
             data = batch.cpu()
         
-        if cfg.derive_forces:
+        extra_stats = {}
+        if cfg.gnn.head == "gemnet_graph":
             extra_stats = {
+                'forces_rmse': force_rmse.detach().cpu().item(),
                 'forces_mae': forces_mae.detach().cpu().item(),
                 'forces_mae_meV': forces_mae.detach().cpu().item() * 1000,
             }
-        else:
-            extra_stats = {}
         logger.update_stats(true=_true,
                             pred=_pred,
                             data=data,
@@ -166,7 +170,7 @@ def eval_epoch(logger, loader, model, split='val'):
             batch.to(torch.device(cfg.device))
             batch.split = split
 
-            if cfg.derive_forces:
+            if cfg.gnn.head == "gemnet_graph" and cfg.derive_forces:
                 batch.pos.requires_grad = True
             out = model(batch)
 
@@ -181,23 +185,27 @@ def eval_epoch(logger, loader, model, split='val'):
             _true = true
             _pred = pred_score
         else:
-            if cfg.derive_forces:
-                grad_outputs = torch.ones_like(pred)
-                grads = torch.autograd.grad(
-                    outputs=pred,
-                    inputs=batch.pos,
-                    grad_outputs=grad_outputs,
-                    create_graph=True,
-                )[0]
-                predicted_forces = -grads.view(-1, 3)
+            if cfg.gnn.head == "gemnet_graph":
+                if cfg.derive_forces:
+                    predicted_energies = pred
+                    grad_outputs = torch.ones_like(predicted_energies)
+                    grads = torch.autograd.grad(
+                        outputs=predicted_energies,
+                        inputs=batch.pos,
+                        grad_outputs=grad_outputs,
+                        create_graph=True,
+                    )[0]
+                    predicted_forces = -grads.view(-1, 3)
+                else:
+                    predicted_energies, predicted_forces = pred
 
                 rho = 0.999
-                true = true.view_as(pred)
-                energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
+                true = true.view_as(predicted_energies)
+                energy_loss = (1 - rho) * torch.nn.functional.l1_loss(predicted_energies, true)
 
                 force_error = predicted_forces - batch.force
                 forces_mae = (force_error.abs().sum(dim=1)).mean()
-                force_rmse = torch.mean(torch.norm(force_error, p=2, dim=1))  # Mean over atoms, then sqrt
+                force_rmse = torch.mean(torch.norm(force_error, p=2, dim=1))
                 forces_loss = rho * force_rmse
 
                 loss = energy_loss + forces_loss
@@ -214,8 +222,10 @@ def eval_epoch(logger, loader, model, split='val'):
             # For storing the raw data
             data = batch.cpu()
 
-        if cfg.derive_forces:
+        extra_stats = {}
+        if cfg.gnn.head == "gemnet_graph":
             extra_stats = {
+                'forces_rmse': force_rmse.detach().cpu().item(),
                 'forces_mae': forces_mae.detach().cpu().item(),
                 'forces_mae_meV': forces_mae.detach().cpu().item() * 1000,
             }
