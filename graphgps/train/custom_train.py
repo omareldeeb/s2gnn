@@ -41,7 +41,6 @@ def train_epoch(logger, loader, model, avg_model,
                 outputs=pred,
                 inputs=batch.pos,
                 grad_outputs=grad_outputs,
-                retain_graph=True,
                 create_graph=True,
             )[0]  # grads has shape [32, 3]
             predicted_forces = -grads.view(-1, 3)  # Convert to shape [batch_size * num_atoms, 3]
@@ -188,7 +187,6 @@ def eval_epoch(logger, loader, model, split='val'):
                     outputs=pred,
                     inputs=batch.pos,
                     grad_outputs=grad_outputs,
-                    retain_graph=True,
                     create_graph=True,
                 )[0]
                 predicted_forces = -grads.view(-1, 3)
@@ -199,7 +197,7 @@ def eval_epoch(logger, loader, model, split='val'):
 
                 force_error = predicted_forces - batch.force
                 forces_mae = (force_error.abs().sum(dim=1)).mean()
-                force_rmse = torch.sqrt((force_error ** 2).sum(dim=1).mean())  # Mean over atoms, then sqrt
+                force_rmse = torch.mean(torch.norm(force_error, p=2, dim=1))  # Mean over atoms, then sqrt
                 forces_loss = rho * force_rmse
 
                 loss = energy_loss + forces_loss
