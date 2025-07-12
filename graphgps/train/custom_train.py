@@ -19,6 +19,7 @@ from graphgps.checkpoint import load_ckpt, save_ckpt, clean_ckpt, get_ckpt_dir
 from graphgps.loss.subtoken_prediction_loss import subtoken_cross_entropy
 from graphgps.utils import cfg_to_dict, flatten_dict, make_wandb_name
 
+from graphgps.loader.gemnet.schedules import LinearWarmupExponentialDecay
 
 def train_epoch(logger, loader, model, avg_model,
                 optimizer, scheduler, batch_accumulation):
@@ -82,6 +83,7 @@ def train_epoch(logger, loader, model, avg_model,
             if cfg.optim.clip_grad_norm:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 10.0)
             optimizer.step()
+            scheduler.step()
             optimizer.zero_grad()
 
             if avg_model is not None:
@@ -309,6 +311,9 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         scheduler: PyTorch learning rate scheduler
 
     """
+    print("RE-INITIALIZING SCHEDULER")
+    # TODO: WIP!! Just for testing on cluster
+    scheduler = LinearWarmupExponentialDecay(optimizer, 10000, 1200000, 0.01, False)
     start_epoch = 0
     if cfg.train.auto_resume:
         start_epoch = load_ckpt(model, optimizer, scheduler,
@@ -338,7 +343,7 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         assert not cfg.gnn.batchnorm, 'No BatchNorm with averaging'
         assert not cfg.gnn.batchnorm_post_mp, 'No BatchNorm with averaging'
         if cfg.optim.model_averaging == 'ema':
-            def avg_fn(avg_parameter, curr_parameter, *args, decay=0.995):
+            def avg_fn(avg_parameter, curr_parameter, *args, decay=0.999):
                 return decay * avg_parameter + (1 - decay) * curr_parameter
         else:
             avg_fn = None
@@ -396,7 +401,8 @@ def custom_train(loggers, loaders, model, optimizer, scheduler):
         if cfg.optim.scheduler == 'reduce_on_plateau':
             scheduler.step(val_perf[-1]['loss'])
         else:
-            scheduler.step()
+            pass
+            # scheduler.step()
         full_epoch_times.append(time.perf_counter() - start_time)
         # Checkpoint with regular frequency (if enabled).
         if cfg.train.enable_ckpt and not cfg.train.ckpt_best \
