@@ -66,7 +66,7 @@ def train_epoch(logger, loader, model, avg_model,
                 energy_loss = (1 - rho) * torch.nn.functional.l1_loss(pred, true)
 
                 force_error = predicted_forces - batch.force
-                forces_mae = (force_error.abs().sum(dim=1)).mean()
+                forces_mae = torch.nn.functional.l1_loss(predicted_forces, batch.force, reduction="mean")
                 force_rmse = torch.mean(torch.norm(force_error, p=2, dim=1))
                 forces_loss = rho * force_rmse
 
@@ -215,7 +215,7 @@ def _eval_epoch(logger, loader, model, split='val'):
                 energy_loss = (1 - rho) * torch.nn.functional.l1_loss(predicted_energies, true)
 
                 force_error = predicted_forces - batch.force
-                forces_mae = (force_error.abs().sum(dim=1)).mean()
+                forces_mae = torch.nn.functional.l1_loss(predicted_forces, batch.force, reduction="mean")
                 force_rmse = torch.mean(torch.norm(force_error, p=2, dim=1))
                 forces_loss = rho * force_rmse
 
