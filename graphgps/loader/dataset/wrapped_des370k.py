@@ -77,7 +77,8 @@ class WrappedDES370K(InMemoryDataset):
         original_data.batch = torch.zeros(original_data.atomic_numbers.shape[0], dtype=torch.long)
         original_data = self.compute_edge_indices_norm(original_data)
 
-        energies = torch.tensor(original_data.energies)
+        #Use the "most accurate" sampling methods, descending from CCSD(T)
+        energies = torch.flip(torch.tensor(original_data.energies)[:6], dims=[-1])
         valid_energies = energies[~torch.isnan(energies)]
         if valid_energies.numel() > 0:
             energy = valid_energies[0]

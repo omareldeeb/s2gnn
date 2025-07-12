@@ -8,7 +8,7 @@ wandb:
 dataset:
   format: torch_geometric
   name: des370k
-  tas: graph
+  task: graph
   task_type: regression
   transductive: False
   node_encoder: True
