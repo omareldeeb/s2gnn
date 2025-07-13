@@ -1,4 +1,6 @@
+import numpy as np
 from torch_geometric.graphgym.register import register_node_encoder
+import torch
 import torch.nn as nn
 
 
@@ -15,9 +17,11 @@ class EmbeddingNodeEncoder(nn.Module):
         super().__init__()
         self.dim_in = dim_emb
         self.dim_emb = dim_emb
-        self.embedding = nn.Embedding(dim_in, dim_emb)
-        nn.init.xavier_uniform_(self.embedding.weight.data)
+        # We go all the way to Pu (94). Use 93 dimensions because of 0-based indexing
+        self.embedding = nn.Embedding(93, dim_emb)
+        nn.init.uniform_(self.embedding.weight, a=-np.sqrt(3), b=np.sqrt(3))
 
     def forward(self, batch):
-        batch.x = self.embedding(batch.x.squeeze(-1).long())
+        # -1 because Z.min()=1 (==Hydrogen)
+        batch.x = self.embedding.to(batch.x.device)(batch.x.squeeze(-1).long() - 1)
         return batch

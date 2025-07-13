@@ -12,26 +12,19 @@ dataset:
   task_type: regression
   transductive: False
   node_encoder: True
-  node_encoder_name: Embedding+MagLapPE
+  node_encoder_name: Embedding
   node_encoder_bn: False
   edge_encoder: True
   edge_encoder_name: GemEdge 
   edge_encoder_bn: False
 posenc_MagLapPE:
   enable: True
-  positional_encoding: True
+  positional_encoding: False
   dim_pe: 8
   q: 0.
   largest_connected_component: False
   sparse: False
   max_freqs: 150
-posenc_RWSE:
-  enable: False
-  kernel:
-    times_func: range(1,21)
-  model: Linear
-  dim_pe: 28
-  raw_norm_type: BatchNorm
 train:
   mode: custom
   batch_size: 1

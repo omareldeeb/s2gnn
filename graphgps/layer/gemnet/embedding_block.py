@@ -112,6 +112,7 @@ class InitialEdgeEmbedding(torch.nn.Module):
         m_ca = torch.cat([h_a, h_c, m_rbf], dim=-1)  # (nEdges, 2*emb_size+nFeatures)
         m_ca = self.dense(m_ca)  # (nEdges, emb_size)
         batch.edge_attr = m_ca
+        batch.rbf = m_rbf
         return batch
 
 
