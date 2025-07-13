@@ -15,7 +15,7 @@ class PerAtomHead(nn.Module):
         )
 
     def forward(self, batch):
-        e_atom = self.atom_head(batch.x).squeeze(-1)
+        e_atom = self.atom_head(batch.x)
 
         e_mol = global_add_pool(e_atom, batch.batch)
 

@@ -12,14 +12,14 @@ dataset:
   task_type: regression
   transductive: False
   node_encoder: True
-  node_encoder_name: Embedding+MagLapPE
+  node_encoder_name: Embedding
   node_encoder_bn: False
   edge_encoder: False
   edge_encoder_name: Bond
   edge_encoder_bn: False
 posenc_MagLapPE:
   enable: True
-  positional_encoding: True
+  positional_encoding: False
   dim_pe: 8
   q: 0.
   largest_connected_component: False
